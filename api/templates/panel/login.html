@@ -1,0 +1,39 @@
+{% extends "panel/base.html" %}
+{% block title %}Login{% endblock %}
+{% block body %}
+<div class="relative flex min-h-screen items-center justify-center overflow-hidden px-4">
+    <!-- Dekorativ halqa -->
+    <svg viewBox="0 0 400 400" class="pointer-events-none absolute left-1/2 top-1/2 h-[520px] w-[520px] -translate-x-1/2 -translate-y-1/2 text-black/[0.05] dark:text-white/[0.06]" fill="none">
+        <circle cx="200" cy="200" r="190" stroke="currentColor" stroke-width="1.2" strokeDasharray="4 10"/>
+    </svg>
+
+    <div class="relative w-full max-w-md">
+        <div class="mb-8 text-center">
+            <span class="kicker"><span class="dot"><span class="ping"></span><span class="core"></span></span>Teacher Panel</span>
+            <h1 class="font-display mt-3 text-3xl font-bold">Enthusiastic English</h1>
+            <p class="mt-2 text-sm text-black/50 dark:text-white/45">Xush kelibsiz! Iltimos, tizimga kiring</p>
+        </div>
+
+        <div class="panel-card p-8">
+            {% if error %}
+            <div class="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+                {{ error }}
+            </div>
+            {% endif %}
+
+            <form method="post" class="space-y-5">
+                {% csrf_token %}
+                <div>
+                    <label class="mb-1 block text-sm font-medium text-black/70 dark:text-white/70">Login</label>
+                    <input type="text" name="username" required autofocus class="panel-input">
+                </div>
+                <div>
+                    <label class="mb-1 block text-sm font-medium text-black/70 dark:text-white/70">Parol</label>
+                    <input type="password" name="password" required class="panel-input">
+                </div>
+                <button type="submit" class="panel-btn panel-btn-primary w-full py-3">Kirish</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

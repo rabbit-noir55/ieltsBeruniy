@@ -1,0 +1,201 @@
+{% extends "panel/base.html" %}
+{% load panel_extras %}
+{% block title %}Dashboard{% endblock %}
+{% block body %}
+<div class="mx-auto max-w-6xl px-4 py-8">
+    <!-- Sarlavha -->
+    <div class="mb-8">
+        <span class="kicker"><span class="dot"><span class="ping"></span><span class="core"></span></span>Ustoz paneli</span>
+        <h1 class="font-display mt-3 text-3xl font-bold">Dashboard</h1>
+        <p class="mt-1 text-sm text-black/50 dark:text-white/45">O'quvchilar va ularning natijalarini kuzating</p>
+    </div>
+
+    <!-- Umumiy statistika -->
+    <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <div class="panel-card p-5">
+            <div class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">O'quvchilar</div>
+            <div class="font-display mt-1 text-3xl font-bold">{{ summary.students }}</div>
+        </div>
+        <div class="panel-card p-5">
+            <div class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">Natijalar</div>
+            <div class="font-display mt-1 text-3xl font-bold">{{ summary.results }}</div>
+        </div>
+        <div class="panel-card p-5">
+            <div class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">O'rtacha band</div>
+            <div class="font-display mt-1 text-3xl font-bold">{% if summary.avg_band %}{{ summary.avg_band|floatformat:1 }}{% else %}—{% endif %}</div>
+        </div>
+        <div class="panel-card p-5">
+            <div class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">So'nggi {{ summary.active_days }} kun</div>
+            <div class="font-display mt-1 text-3xl font-bold">{{ summary.active_7d }}</div>
+            <div class="text-xs text-black/40 dark:text-white/40">faol o'quvchi</div>
+        </div>
+    </div>
+
+    <!-- Skill'lar bo'yicha o'rtacha band -->
+    <div class="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {% for skill, label in SKILL_LABELS.items %}
+        <div class="panel-card p-5">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">{{ label }}</span>
+                <span class="text-[11px] text-black/30 dark:text-white/30">o'rtacha</span>
+            </div>
+            <div class="font-display mt-1 text-3xl font-bold">
+                {% if summary.skills|get_item:skill %}
+                <span data-band="{{ summary.skills|get_item:skill }}">{{ summary.skills|get_item:skill|floatformat:1 }}</span>
+                {% else %}—{% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Yaqindagi natijalar -->
+    <div class="panel-card mt-8 overflow-hidden">
+        <div class="flex items-center justify-between border-b border-black/[0.06] px-6 py-4 dark:border-white/[0.06]">
+            <div class="flex items-center gap-3">
+                <h2 class="font-display text-base font-bold">Yaqindagi natijalar</h2>
+                <span class="text-xs text-black/40 dark:text-white/40">so'nggi {{ recent|length }} ta</span>
+            </div>
+            {% if recent|length > 8 %}
+            <button id="recent-toggle" type="button"
+                    class="panel-btn panel-btn-ghost !px-3 !py-1.5 text-xs"
+                    data-open="0">
+                <span id="recent-toggle-label">Ko'proq ko'rsatish</span>
+            </button>
+            {% endif %}
+        </div>
+        {% if recent %}
+        <div class="divide-y divide-black/[0.04] dark:divide-white/[0.04]">
+            {% for r in recent %}
+            <a href="{% url 'panel:student_detail' r.student_id %}"
+               class="recent-row flex items-center justify-between gap-3 px-6 py-3 text-sm transition hover:bg-black/[0.02] dark:hover:bg-white/[0.03]{% if forloop.counter0 >= 8 %} recent-hidden{% endif %}"
+               {% if forloop.counter0 >= 8 %}style="display:none"{% endif %}>
+                <div class="flex min-w-0 items-center gap-3">
+                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/[0.05] text-[11px] font-bold text-black/50 dark:bg-white/10 dark:text-white/60">
+                        {{ r.student.full_name|slice:":1"|upper }}
+                    </span>
+                    <div class="min-w-0">
+                        <div class="truncate font-semibold">{{ r.student.full_name }}</div>
+                        <div class="text-xs text-black/40 dark:text-white/40">
+                            {{ SKILL_LABELS|get_item:r.skill }} ·
+                            {% if r.part_num %}Part {{ r.part_num }}{% elif r.task_part %}Task {{ r.task_part }}{% else %}S{{ r.series_id }} T{{ r.test_num }}{% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="flex shrink-0 items-center gap-3">
+                    <span class="text-xs text-black/40 dark:text-white/40">{{ r.updated_at|date:"d.m H:i" }}</span>
+                    {% if r.band %}
+                    <span class="band-badge" data-band="{{ r.band }}">{{ r.band }}</span>
+                    {% else %}
+                    <span class="band-badge na">—</span>
+                    {% endif %}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="px-6 py-12 text-center text-sm text-black/35 dark:text-white/30">Hozircha natijalar yo'q</div>
+        {% endif %}
+    </div>
+
+    <script>
+        (function () {
+            var btn = document.getElementById('recent-toggle');
+            if (!btn) return;
+            var label = document.getElementById('recent-toggle-label');
+            var rows = document.querySelectorAll('.recent-hidden');
+            btn.addEventListener('click', function () {
+                var show = btn.dataset.open !== '1';
+                btn.dataset.open = show ? '1' : '0';
+                rows.forEach(function (el) { el.style.display = show ? '' : 'none'; });
+                label.textContent = show ? 'Kamaytirish' : "Ko'proq ko'rsatish";
+            });
+        })();
+    </script>
+
+    <!-- Qidiruv + o'quvchilar jadvali (monitoring) -->
+    <form method="get" class="mt-8 flex flex-col gap-2 sm:flex-row">
+        <input type="text" name="q" value="{{ query }}" placeholder="O'quvchini qidirish (ism yoki login)..."
+               class="panel-input sm:max-w-md">
+        <button type="submit" class="panel-btn panel-btn-primary">Qidirish</button>
+        {% if query %}<a href="{% url 'panel:dashboard' %}" class="panel-btn panel-btn-ghost">Tozalash</a>{% endif %}
+    </form>
+
+    <div class="panel-card mt-4 overflow-x-auto">
+        <table class="w-full min-w-[820px] panel-table">
+            <thead>
+                <tr>
+                    <th>O'quvchi</th>
+                    <th class="text-center">Natijalar</th>
+                    {% for skill, label in SKILL_LABELS.items %}
+                    <th class="text-center">{{ label }}</th>
+                    {% endfor %}
+                    <th class="text-center">O'rtacha</th>
+                    <th>Oxirgi faollik</th>
+                    <th class="text-right">Batafsil</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in students %}
+                <tr class="transition hover:bg-black/[0.02] dark:hover:bg-white/[0.03]">
+                    <td>
+                        <div class="flex items-center gap-2">
+                            <div class="font-semibold text-black/80 dark:text-white/80">{{ s.full_name }}</div>
+                            {% if s.is_blocked %}
+                            <span class="inline-flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] font-bold text-red-700 dark:text-red-400">
+                                <svg viewBox="0 0 24 24" class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                Bloklangan
+                            </span>
+                            {% endif %}
+                        </div>
+                        <div class="text-xs text-black/40 dark:text-white/40">@{{ s.username }}</div>
+                    </td>
+                    <td class="text-center font-semibold text-black/60 dark:text-white/60">{{ s.results_count }}</td>
+                    {% for skill, label in SKILL_LABELS.items %}
+                    <td class="text-center">
+                        {% with avg=s|get_item:"avg_"|add:skill %}
+                        <span class="band-badge" data-band="{% if avg %}{{ avg }}{% else %}x{% endif %}">{% if avg %}{{ avg|floatformat:1 }}{% else %}—{% endif %}</span>
+                        {% endwith %}
+                    </td>
+                    {% endfor %}
+                    <td class="text-center">
+                        {% if s.avg_band %}
+                        <span class="band-badge" data-band="{{ s.avg_band }}">{{ s.avg_band|floatformat:1 }}</span>
+                        {% else %}
+                        <span class="band-badge na">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if s.last_activity %}
+                        <span class="text-xs text-black/50 dark:text-white/50">{{ s.last_activity|date:"d.m.Y H:i" }}</span>
+                        {% if s.last_activity > now_7d_ago %}
+                        <span class="ml-1 inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>faol
+                        </span>
+                        {% endif %}
+                        {% else %}
+                        <span class="text-xs text-black/30 dark:text-white/25">faollik yo'q</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-right">
+                        <div class="flex items-center justify-end gap-2">
+                            <a href="{% url 'panel:student_detail' s.id %}" class="text-sm font-semibold text-black/60 underline-offset-4 hover:text-black hover:underline dark:text-white/60 dark:hover:text-white">Ko'rish</a>
+                            <form method="post" action="{% if s.is_blocked %}{% url 'panel:unblock_student' s.id %}{% else %}{% url 'panel:block_student' s.id %}{% endif %}">
+                                {% csrf_token %}
+                                <button type="submit"
+                                        class="rounded-full px-2.5 py-1 text-[11px] font-bold transition {% if s.is_blocked %}bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/25 dark:text-emerald-400{% else %}bg-red-500/10 text-red-700 hover:bg-red-500/20 dark:text-red-400{% endif %}">
+                                    {% if s.is_blocked %}Ochish{% else %}Bloklash{% endif %}
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="9" class="px-5 py-12 text-center text-black/35 dark:text-white/30">O'quvchilar topilmadi</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

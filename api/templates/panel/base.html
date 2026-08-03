@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Teacher Panel{% endblock %} — Enthusiastic English</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class' };
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+        :root { --accent: #17171a; --accent-contrast: #ffffff; }
+        .dark { --accent: #ffffff; --accent-contrast: #17171a; }
+
+        html, body { font-family: 'Inter', sans-serif; }
+        .font-display { font-family: 'Space Grotesk', sans-serif; letter-spacing: -0.01em; }
+
+        /* Karta — IntroPage'dagi ShineCard uslubi */
+        .panel-card {
+            background: #ffffff;
+            border: 1px solid rgba(0, 0, 0, .08);
+            border-radius: 16px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
+        }
+        .dark .panel-card {
+            background: #141416;
+            border-color: rgba(255, 255, 255, .1);
+            box-shadow: none;
+        }
+
+        /* Kirish maydoni */
+        .panel-input {
+            width: 100%;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 0, 0, .12);
+            padding: .6rem 1rem;
+            font-size: .875rem;
+            color: inherit;
+            background: transparent;
+        }
+        .dark .panel-input { border-color: rgba(255, 255, 255, .15); }
+        .panel-input:focus { outline: none; border-color: transparent; box-shadow: 0 0 0 2px var(--accent); }
+
+        /* Tugmalar — IntroPage'dagi pill tugmalar uslubi */
+        .panel-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: .5rem;
+            border-radius: 9999px;
+            padding: .6rem 1.4rem;
+            font-size: .875rem;
+            font-weight: 600;
+            transition: all .2s;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .panel-btn-primary { background: var(--accent); color: var(--accent-contrast); }
+        .panel-btn-primary:hover { opacity: .88; }
+        .panel-btn-ghost { border: 1px solid rgba(0, 0, 0, .15); color: rgba(0, 0, 0, .7); }
+        .dark .panel-btn-ghost { border-color: rgba(255, 255, 255, .2); color: rgba(255, 255, 255, .8); }
+        .panel-btn-ghost:hover { border-color: rgba(0, 0, 0, .35); }
+        .dark .panel-btn-ghost:hover { border-color: rgba(255, 255, 255, .45); }
+
+        /* Kicker pill — IntroPage'dagi animatsiyali belgi */
+        .kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            border-radius: 9999px;
+            border: 1px solid rgba(0, 0, 0, .12);
+            padding: .3rem .9rem;
+            font-size: .7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            color: rgba(0, 0, 0, .5);
+        }
+        .dark .kicker { border-color: rgba(255, 255, 255, .15); color: rgba(255, 255, 255, .5); }
+        .kicker .dot { position: relative; width: 6px; height: 6px; }
+        .kicker .dot .ping {
+            position: absolute; inset: 0; border-radius: 9999px;
+            background: currentColor; opacity: .7;
+            animation: softPing 1.8s cubic-bezier(0, 0, .2, 1) infinite;
+        }
+        .kicker .dot .core { position: relative; display: block; width: 6px; height: 6px; border-radius: 9999px; background: currentColor; }
+        @keyframes softPing { 0% { transform: scale(1); opacity: .7; } 75%, 100% { transform: scale(2.4); opacity: 0; } }
+
+        /* Jadval sarlavhalari */
+        .panel-table th {
+            text-align: left;
+            padding: .7rem 1.25rem;
+            font-weight: 600;
+            font-size: .72rem;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            color: rgba(0, 0, 0, .4);
+            border-bottom: 1px solid rgba(0, 0, 0, .06);
+        }
+        .dark .panel-table th { color: rgba(255, 255, 255, .4); border-bottom-color: rgba(255, 255, 255, .06); }
+        .panel-table td { padding: .75rem 1.25rem; font-size: .875rem; border-bottom: 1px solid rgba(0, 0, 0, .04); }
+        .dark .panel-table td { border-bottom-color: rgba(255, 255, 255, .04); }
+        .panel-table tr:last-child td { border-bottom: none; }
+
+        /* Band ko'rsatkichi — data-band orqali JS rang beradi */
+        .band-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 2.1rem;
+            padding: .18rem .55rem;
+            border-radius: 9999px;
+            font-size: .75rem;
+            font-weight: 700;
+        }
+        .band-badge.high { background: rgba(16, 185, 129, .15); color: #047857; }
+        .dark .band-badge.high { color: #34d399; }
+        .band-badge.mid { background: rgba(245, 158, 11, .15); color: #b45309; }
+        .dark .band-badge.mid { color: #fbbf24; }
+        .band-badge.low { background: rgba(239, 68, 68, .15); color: #b91c1c; }
+        .dark .band-badge.low { color: #f87171; }
+        .band-badge.na { background: rgba(0, 0, 0, .05); color: rgba(0, 0, 0, .3); }
+        .dark .band-badge.na { background: rgba(255, 255, 255, .06); color: rgba(255, 255, 255, .3); }
+    </style>
+    <script>
+        (function () {
+            try {
+                if (localStorage.getItem('panel_theme') === 'dark') {
+                    document.documentElement.classList.add('dark');
+                }
+            } catch (e) { /* ignore */ }
+        })();
+        function toggleTheme() {
+            var el = document.documentElement;
+            el.classList.toggle('dark');
+            try {
+                localStorage.setItem('panel_theme', el.classList.contains('dark') ? 'dark' : 'light');
+            } catch (e) { /* ignore */ }
+        }
+        // Band badge'larni qiymatiga qarab bo'yash (template'da mantiq takrorlanmasin)
+        document.addEventListener('DOMContentLoaded', function () {
+            document.querySelectorAll('[data-band]').forEach(function (el) {
+                var b = parseFloat(el.getAttribute('data-band'));
+                if (isNaN(b)) { el.className = 'band-badge na'; return; }
+                el.className = 'band-badge ' + (b >= 7 ? 'high' : (b >= 5.5 ? 'mid' : 'low'));
+            });
+        });
+    </script>
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="min-h-screen bg-[#F6F5F2] text-[#17171A] dark:bg-[#0A0A0B] dark:text-[#F5F5F5]">
+    {% if request.user.is_authenticated %}
+    <header class="sticky top-0 z-40 border-b border-black/[0.08] bg-[#F6F5F2]/85 backdrop-blur dark:border-white/10 dark:bg-[#0A0A0B]/85">
+        <div class="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+            <a href="{% url 'panel:dashboard' %}" class="flex items-center gap-2">
+                <span class="font-display text-lg font-bold">Enthusiastic English</span>
+                <span class="hidden rounded-full bg-black/[0.06] px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-black/50 sm:inline dark:bg-white/[0.08] dark:text-white/50">Teacher</span>
+            </a>
+            <nav class="flex items-center gap-1 sm:gap-2 text-sm">
+                <a href="{% url 'panel:dashboard' %}"
+                   class="rounded-full px-3 py-1.5 font-semibold {% if request.resolver_match.url_name == 'dashboard' %}bg-black/[0.07] text-black/80 dark:bg-white/10 dark:text-white/90{% else %}text-black/50 hover:text-black/80 dark:text-white/50 dark:hover:text-white/90{% endif %}">Dashboard</a>
+                <a href="{% url 'panel:news_list' %}"
+                   class="rounded-full px-3 py-1.5 font-semibold {% if request.resolver_match.url_name|slice:':5' == 'news_' or request.resolver_match.url_name == 'news_list' %}bg-black/[0.07] text-black/80 dark:bg-white/10 dark:text-white/90{% else %}text-black/50 hover:text-black/80 dark:text-white/50 dark:hover:text-white/90{% endif %}">News</a>
+                <button type="button" onclick="toggleTheme()" title="Rejimni almashtirish"
+                        class="flex h-8 w-8 items-center justify-center rounded-full text-black/50 transition hover:bg-black/[0.06] hover:text-black/80 dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white/90">
+                    <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </svg>
+                </button>
+                <a href="{% url 'panel:logout' %}" class="text-sm font-semibold text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300">Chiqish</a>
+            </nav>
+        </div>
+    </header>
+    {% endif %}
+    {% block body %}
+    {% endblock %}
+</body>
+</html>

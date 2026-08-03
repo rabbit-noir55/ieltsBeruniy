@@ -1,0 +1,66 @@
+{% extends "panel/base.html" %}
+{% block title %}News{% endblock %}
+{% block body %}
+<div class="mx-auto max-w-6xl px-4 py-8">
+    <div class="flex flex-wrap items-end justify-between gap-3 mb-8">
+        <div>
+            <span class="kicker"><span class="dot"><span class="ping"></span><span class="core"></span></span>Postlar</span>
+            <h1 class="font-display mt-2 text-3xl font-bold">News</h1>
+            <p class="mt-1 text-sm text-black/50 dark:text-white/45">Yangiliklar va postlarni boshqaring</p>
+        </div>
+        <a href="{% url 'panel:news_add' %}" class="panel-btn panel-btn-primary">+ Yangi post</a>
+    </div>
+
+    <div class="panel-card overflow-x-auto">
+        <table class="w-full min-w-[720px] panel-table">
+            <thead>
+                <tr>
+                    <th>Rasm</th>
+                    <th>Sarlavha</th>
+                    <th>Sanasi</th>
+                    <th>Stat</th>
+                    <th>Holat</th>
+                    <th class="text-right">Amallar</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for n in news_list %}
+                <tr>
+                    <td>
+                        {% if n.image %}
+                        <img src="{{ n.image.url }}" alt="" class="h-11 w-16 rounded-lg object-cover">
+                        {% else %}
+                        <span class="text-black/25 dark:text-white/25">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="max-w-xs truncate font-semibold text-black/80 dark:text-white/80">{{ n.title }}</td>
+                    <td class="text-black/50 dark:text-white/50">{{ n.published_at|date:"d.m.Y" }}</td>
+                    <td class="whitespace-nowrap text-black/50 dark:text-white/50">👍 {{ n.like_count }} · 💬 {{ n.comment_count }} · 👁 {{ n.read_count }}</td>
+                    <td>
+                        {% if n.is_published %}
+                        <span class="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>E'lon qilingan
+                        </span>
+                        {% else %}
+                        <span class="rounded-full bg-black/[0.06] px-2.5 py-0.5 text-xs font-bold text-black/50 dark:bg-white/10 dark:text-white/50">Qoralama</span>
+                        {% endif %}
+                    </td>
+                    <td class="whitespace-nowrap text-right">
+                        <a href="{% url 'panel:news_edit' n.id %}" class="text-sm font-semibold text-black/60 underline-offset-4 hover:text-black hover:underline dark:text-white/60 dark:hover:text-white">Tahrirlash</a>
+                        <form method="post" action="{% url 'panel:news_delete' n.id %}" class="ml-3 inline"
+                              onsubmit="return confirm('Post o\'chirilsinmi?');">
+                            {% csrf_token %}
+                            <button type="submit" class="text-sm font-semibold text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300">O'chirish</button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="px-5 py-12 text-center text-black/35 dark:text-white/30">Hozircha postlar yo'q</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,77 @@
+# Render Blueprint — backend (Django Web Service).
+#
+# QO'LLANISH:
+#   1. Backend papkasini GitHub'ga push qiling.
+#   2. render.com → "New + Blueprint" → repo'ni ulang (repo URL'ini quyida
+#      o'zgartiring) yoki "New + Web Service" bilan qo'lda ulang (Docker).
+#   3. Env o'zgaruvchilarni Render Dashboard → Environment da to'ldiring
+#      (quyidagilar ko'rsatiladi, qiymatlari dashboardda kiritiladi).
+#   4. Deploy qiling. URL: https://<service>.onrender.com
+#
+# Eslatma: barcha qiymatlar `sync: false` — ular render.yaml'da SAQLANMAYDI,
+# har birini Render dashboardida bir marta kiritasiz (secrets xavfsiz).
+
+services:
+  - type: web
+    name: ee-backend
+    runtime: docker
+    repo: https://github.com/rabbit-noir55/ieltsBeruniy.git
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health/
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_ALLOWED_HOSTS
+        sync: false
+      - key: DJANGO_CSRF_TRUSTED_ORIGINS
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: TEACHER_PASSWORD
+        sync: false
+      # Supabase storage (rasmlar)
+      - key: SUPABASE_S3_ENDPOINT
+        sync: false
+      - key: SUPABASE_ACCESS_KEY
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: SUPABASE_BUCKET
+        sync: false
+      - key: SUPABASE_PUBLIC_URL
+        sync: false
+      # AI provayderlar (writing feedback)
+      - key: GEMINI_KEY_1
+        sync: false
+      - key: GEMINI_KEY_2
+        sync: false
+      - key: GEMINI_KEY_3
+        sync: false
+      - key: GEMINI_KEY_4
+        sync: false
+      - key: GROQ_KEY_1
+        sync: false
+      - key: GROQ_KEY_2
+        sync: false
+      - key: CEREBRAS_KEY_1
+        sync: false
+      - key: CEREBRAS_KEY_2
+        sync: false
+      - key: OPENROUTER_KEY_1
+        sync: false
+      - key: OPENROUTER_KEY_2
+        sync: false
+      - key: MISTRAL_KEY_1
+        sync: false
+      - key: MISTRAL_KEY_2
+        sync: false
+      # AI-detektor (Hugging Face Serverless)
+      - key: HF_TOKEN
+        sync: false
+      - key: HF_DETECTOR_MODEL
+        sync: false
