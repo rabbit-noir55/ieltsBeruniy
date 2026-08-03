@@ -50,9 +50,12 @@ if not SECRET_KEY:
             'get_random_secret_key as g; print(g())"'
         )
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1'] + [
+_allowed_env = [
     h.strip() for h in os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',') if h.strip()
 ]
+ALLOWED_HOSTS = list(dict.fromkeys(
+    ['localhost', '127.0.0.1', '.onrender.com', '.netlify.app'] + _allowed_env
+))
 
 CSRF_TRUSTED_ORIGINS = [
     o.strip() for o in os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',')
