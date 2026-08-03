@@ -1,6 +1,7 @@
 #!/bin/sh
 set -e
 
+python manage.py collectstatic --noinput
 python manage.py migrate --noinput
 
 # TEACHER_PASSWORD o'rnatilmagan bo'lsa bu buyruq xato beradi. Bu holda

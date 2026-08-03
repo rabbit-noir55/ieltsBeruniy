@@ -10,8 +10,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN python manage.py collectstatic --noinput
-
 EXPOSE 7860
 
 CMD ["sh", "entrypoint.sh"]
