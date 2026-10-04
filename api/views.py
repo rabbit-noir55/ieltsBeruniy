@@ -1,32 +1,31 @@
+import json
+import secrets
+import string
 from datetime import timedelta, timezone as dt_timezone
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth import authenticate
 from django.core.cache import cache
-from django.db.models import Avg, Count, Max, Q, Subquery, OuterRef
+from django.db.models import Avg, Count, Max, Q
 from django.http import JsonResponse
 from django.utils import timezone
-from django.views.decorators.cache import cache_control
-from django.views.decorators.vary import vary_on_headers
 from rest_framework import permissions, status, viewsets
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
-from .ai_detector import get_ai_detection
-from .ai_feedback import get_writing_feedback
+import requests as http_requests
+
 from .permissions import BLOCKED_MESSAGE
 from .throttles import AuthThrottle
-from .models import News, NewsComment, NewsRead, NewsReaction, TestResult, TypingResult, User
+from .models import TestResult, TypingResult, User, UserGroup
 from .serializers import (
-    NewsCommentSerializer,
-    NewsDetailSerializer,
-    NewsListSerializer,
     RegisterSerializer,
     TestResultSerializer,
     TypingResultSerializer,
     UserSerializer,
+    UserGroupSerializer,
 )
 
 
@@ -64,12 +63,17 @@ def register(request):
 @permission_classes([permissions.AllowAny])
 @throttle_classes([AuthThrottle])
 def login(request):
-    username = request.data.get('username', '')
+    email = request.data.get('email', '').strip().lower()
     password = request.data.get('password', '')
-    user = authenticate(username=username, password=password)
+    if not email:
+        return Response(
+            {'detail': 'Email kiritilishi shart.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    user = authenticate(username=email, password=password)
     if user is None:
         return Response(
-            {'detail': 'Login yoki parol notogri.'},
+            {'detail': 'Email yoki parol notogri.'},
             status=status.HTTP_401_UNAUTHORIZED,
         )
     if getattr(user, 'is_blocked', False):
@@ -79,6 +83,65 @@ def login(request):
         )
     token, _ = Token.objects.get_or_create(user=user)
     return Response({'token': token.key, 'user': UserSerializer(user).data})
+
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+@throttle_classes([AuthThrottle])
+def google_login(request):
+    """Google ID token ni tekshiradi, user yaratadi/tapadi, token qaytaradi."""
+    credential = request.data.get('credential')
+    if not credential:
+        return Response({'detail': 'Google token kiritilmadi.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Google tokeninfo endpoint orqali tekshirish
+    try:
+        resp = http_requests.get(
+            'https://oauth2.googleapis.com/tokeninfo',
+            params={'id_token': credential},
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            return Response({'detail': 'Google token yaroqsiz.'}, status=status.HTTP_401_UNAUTHORIZED)
+        google_data = resp.json()
+    except Exception:
+        return Response({'detail': 'Google bilan ulanishda xatolik.'}, status=status.HTTP_502_BAD_GATEWAY)
+
+    email = google_data.get('email')
+    if not email:
+        return Response({'detail': 'Google hisobidan email olinmadi.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    google_sub = google_data.get('sub')
+    given_name = google_data.get('given_name', '')
+    family_name = google_data.get('family_name', '')
+    picture = google_data.get('picture', '')
+
+    # Email bo'yicha user topish
+    user = User.objects.filter(email=email).first()
+
+    if user:
+        # Mavjud user — token qaytar
+        token, _ = Token.objects.get_or_create(user=user)
+        return Response({'token': token.key, 'user': UserSerializer(user).data})
+
+    # Yangi user yaratish
+    alphabet = string.ascii_letters + string.digits
+    random_password = ''.join(secrets.choice(alphabet) for _ in range(8))
+    user = User(
+        email=email,
+        first_name=given_name,
+        last_name=family_name,
+        role=User.ROLE_STUDENT,
+        password_plain=random_password,
+    )
+    user.set_unusable_password()
+    user.save()  # save() will auto-generate unique username from email
+
+    token, _ = Token.objects.get_or_create(user=user)
+    return Response(
+        {'token': token.key, 'user': UserSerializer(user).data},
+        status=status.HTTP_201_CREATED,
+    )
 
 
 @api_view(['GET', 'PATCH'])
@@ -219,265 +282,6 @@ class ResultViewSet(viewsets.ModelViewSet):
         return Response(out, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 
-# ── News (post) ───────────────────────────────────────────────────────────────
-
-class NewsPagination(PageNumberPagination):
-    page_size = 10
-    page_size_query_param = 'page_size'
-    max_page_size = 50
-
-
-def _reaction_subquery(user_id):
-    return Subquery(
-        NewsReaction.objects.filter(news=OuterRef('pk'), user_id=user_id).values('reaction')[:1]
-    )
-
-
-def _annotate_news(qs, user):
-    qs = qs.annotate(
-        like_count=Count('reactions', filter=Q(reactions__reaction=NewsReaction.LIKE), distinct=True),
-        dislike_count=Count('reactions', filter=Q(reactions__reaction=NewsReaction.DISLIKE), distinct=True),
-        comment_count=Count('comments', distinct=True),
-        read_count=Count('reads', distinct=True),
-    )
-    if user.is_authenticated:
-        qs = qs.annotate(my_reaction=_reaction_subquery(user.id))
-    else:
-        qs = qs.annotate(my_reaction=Subquery(NewsReaction.objects.none().values('reaction')[:1]))
-    return qs
-
-
-@api_view(['GET'])
-@permission_classes([permissions.AllowAny])
-# `private` SHART: javobda `my_reaction` — foydalanuvchiga xos maydon bor.
-# Usiz oraliq proxy/CDN bir foydalanuvchi javobini boshqasiga berishi mumkin.
-@cache_control(private=True, max_age=30)
-@vary_on_headers('Authorization')
-def news_list(request):
-    qs = News.objects.filter(is_published=True).order_by('-published_at')
-    qs = _annotate_news(qs, request.user)
-    paginator = NewsPagination()
-    page = paginator.paginate_queryset(qs, request)
-    serializer = NewsListSerializer(page, many=True, context={'request': request})
-    return paginator.get_paginated_response(serializer.data)
-
-
-@api_view(['GET'])
-@permission_classes([permissions.AllowAny])
-def news_detail(request, news_id):
-    news = News.objects.filter(pk=news_id, is_published=True).first()
-    if news is None:
-        return Response({'detail': 'Post topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
-
-    if request.user.is_authenticated:
-        NewsRead.objects.get_or_create(news=news, user=request.user)
-
-    qs = _annotate_news(News.objects.filter(pk=news.pk), request.user)
-    news = qs.select_related('created_by').prefetch_related('comments__user').first()
-    serializer = NewsDetailSerializer(news, context={'request': request})
-    return Response(serializer.data)
-
-
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def news_react(request, news_id):
-    news = News.objects.filter(pk=news_id, is_published=True).first()
-    if news is None:
-        return Response({'detail': 'Post topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
-
-    reaction = request.data.get('reaction')
-    if reaction not in (NewsReaction.LIKE, NewsReaction.DISLIKE, None):
-        return Response({'detail': 'reaction like yoki dislike bo\'lishi kerak.'},
-                        status=status.HTTP_400_BAD_REQUEST)
-
-    existing = NewsReaction.objects.filter(news=news, user=request.user).first()
-    if reaction is None:
-        # Aniq bekor qilish
-        if existing:
-            existing.delete()
-    elif existing is None:
-        NewsReaction.objects.create(news=news, user=request.user, reaction=reaction)
-    elif existing.reaction == reaction:
-        # toggle: bir xil reaksiya qayta bosilsa bekor qilamiz
-        existing.delete()
-    else:
-        # like -> dislike (yoki teskarisi): almashtiramiz, o'chirmaymiz
-        existing.reaction = reaction
-        existing.save(update_fields=['reaction', 'created_at'])
-
-    qs = _annotate_news(News.objects.filter(pk=news.pk), request.user)
-    news = qs.first()
-    return Response(NewsListSerializer(news, context={'request': request}).data)
-
-
-@api_view(['GET', 'POST'])
-@permission_classes([permissions.IsAuthenticated])
-def news_comments(request, news_id):
-    news = News.objects.filter(pk=news_id, is_published=True).first()
-    if news is None:
-        return Response({'detail': 'Post topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
-
-    if request.method == 'GET':
-        comments = news.comments.select_related('user').all()
-        return Response(NewsCommentSerializer(comments, many=True, context={'request': request}).data)
-
-    text = (request.data.get('text') or '').strip()
-    if not text:
-        return Response({'detail': 'Izoh bo\'sh bo\'lishi mumkin emas.'},
-                        status=status.HTTP_400_BAD_REQUEST)
-    comment = NewsComment.objects.create(news=news, user=request.user, text=text[:2000])
-    return Response(
-        NewsCommentSerializer(comment, context={'request': request}).data,
-        status=status.HTTP_201_CREATED,
-    )
-
-
-@api_view(['DELETE'])
-@permission_classes([permissions.IsAuthenticated])
-def news_comment_delete(request, news_id, comment_id):
-    comment = NewsComment.objects.filter(pk=comment_id, news_id=news_id).first()
-    if comment is None:
-        return Response({'detail': 'Izoh topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
-    is_owner = comment.user_id == request.user.id
-    is_teacher = request.user.role == User.ROLE_TEACHER
-    if not (is_owner or is_teacher):
-        return Response({'detail': 'Ruxsat yo\'q.'}, status=status.HTTP_403_FORBIDDEN)
-    comment.delete()
-    return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-@api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
-def news_unread_count(request):
-    unread = News.objects.filter(is_published=True).exclude(
-        reads__user=request.user
-    ).count()
-    return Response({'unread': unread})
-
-
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def news_mark_all_read(request):
-    news_ids = News.objects.filter(
-        is_published=True
-    ).exclude(reads__user=request.user).values_list('id', flat=True)
-    NewsRead.objects.bulk_create(
-        [NewsRead(news_id=nid, user=request.user) for nid in news_ids],
-        ignore_conflicts=True,
-    )
-    return Response({'unread': 0})
-
-
-# ── Writing AI feedback (proxy) ───────────────────────────────────────────────
-#
-# AI provayder kalitlari FAQAT shu yerda — serverda. Ilgari bu chaqiruv
-# brauzerdan to'g'ridan-to'g'ri qilinardi va kalitlar `VITE_` prefiksi bilan
-# JS bundle'iga tushib ketardi (ya'ni ochiq edi).
-
-MAX_FEEDBACK_PER_DAY = 15  # bir o'quvchi uchun kunlik AI baholash chegarasi
-MAX_ESSAY_CHARS = 20_000
-MAX_REQUIREMENT_CHARS = 5_000
-MAX_IMAGE_BASE64_CHARS = 8_000_000  # ~6 MB rasm
-
-
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def writing_feedback(request):
-    task_part = request.data.get('task_part')
-    try:
-        task_part = int(task_part)
-    except (TypeError, ValueError):
-        task_part = 0
-    if task_part not in (1, 2):
-        return Response(
-            {'detail': 'task_part 1 yoki 2 bo\'lishi kerak.'},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    essay_text = (request.data.get('essay_text') or '').strip()
-    if not essay_text:
-        return Response(
-            {'detail': 'Insho matni bo\'sh bo\'lishi mumkin emas.'},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-    if len(essay_text) > MAX_ESSAY_CHARS:
-        return Response(
-            {'detail': f'Insho matni juda uzun (maks. {MAX_ESSAY_CHARS} belgi).'},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    requirement_text = (request.data.get('requirement_text') or '')[
-        :MAX_REQUIREMENT_CHARS
-    ]
-
-    image = request.data.get('image') or None
-    if image is not None:
-        if (
-            not isinstance(image, dict)
-            or not isinstance(image.get('base64'), str)
-            or not isinstance(image.get('mime_type'), str)
-            or not image['mime_type'].startswith('image/')
-        ):
-            return Response(
-                {'detail': 'image maydoni {base64, mime_type} shaklida bo\'lishi kerak.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if len(image['base64']) > MAX_IMAGE_BASE64_CHARS:
-            return Response(
-                {'detail': 'Rasm juda katta.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-    # Kunlik chegara — AI kvotasini asrash uchun. Ilgari bu faqat brauzerda
-    # (localStorage'da) tekshirilardi, ya'ni osongina chetlab o'tilardi.
-    # `cache.add` + `cache.incr` ATOMIK — bir vaqtda kelgan so'rovlar ham
-    # limitdan oshib keta olmaydi. Kvota AI chaqiruvidan OLDIN rezerv qilinadi;
-    # chaqiruv muvaffaqiyatsiz bo'lsa `cache.decr` bilan qaytarib beriladi.
-    day_start, _ = tashkent_day_bounds()
-    quota_key = f'ai_fb_quota_{request.user.id}_{day_start.date().isoformat()}'
-    if cache.add(quota_key, 1, 60 * 60 * 25):
-        used = 1
-    else:
-        used = cache.incr(quota_key)
-    if used > MAX_FEEDBACK_PER_DAY:
-        cache.decr(quota_key)  # AI chaqirilmadi — rezervni qaytaramiz
-        return Response(
-            {
-                'detail': (
-                    f'Kunlik AI baholash chegarasiga yetdingiz '
-                    f'({MAX_FEEDBACK_PER_DAY} ta). Yarim tundan keyin '
-                    f'(Toshkent vaqti) qayta urinib ko\'ring.'
-                )
-            },
-            status=status.HTTP_429_TOO_MANY_REQUESTS,
-        )
-
-    result = get_writing_feedback(
-        task_part=task_part,
-        requirement_text=requirement_text,
-        essay_text=essay_text,
-        image=image,
-    )
-
-    if not result['success']:
-        cache.decr(quota_key)  # muvaffaqiyatsiz urinish kvotadan hisoblanmaydi
-        return Response(
-            {'detail': result['error']},
-            status=status.HTTP_503_SERVICE_UNAVAILABLE,
-        )
-
-    return Response({
-        'data': result['data'],
-        'provider_used': result['provider_used'],
-        'degraded': result['degraded'],
-        'quota_used': used,
-        'quota_limit': MAX_FEEDBACK_PER_DAY,
-        # AI-detektor (ZeroGPT o'rniga bepul HF modeli). Detektor ishlamasa
-        # yoki global kunlik chegara oshsa `None` qaytadi — feedback buzilmaydi.
-        'ai_detection': get_ai_detection(essay_text),
-    })
-
-
 # ── Typing test (Monkeytype uslubida) ───────────────────────────────────────
 
 VALID_TYPING_MODES = dict(TypingResult.MODE_CHOICES)
@@ -564,3 +368,122 @@ def typing_leaderboard(request):
         'entries': entries,
         'me': me,
     })
+
+
+# ── Groups (public API for frontend) ────────────────────────────────────────
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def group_list(request):
+    """Barcha guruhlar ro'yxati (frontend header uchun)."""
+    groups = UserGroup.objects.annotate(
+        user_count=Count('users', filter=Q(users__role=User.ROLE_STUDENT))
+    )
+    data = UserGroupSerializer(groups, many=True).data
+    return Response(data)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def group_detail_by_slug(request, slug):
+    """Bitta guruhning to'liq ma'lumotlari (students, schedule, ielts_date)."""
+    group = UserGroup.objects.filter(slug=slug).first()
+    if not group:
+        return Response({'detail': 'Guruhi topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
+    students = group.users.filter(role=User.ROLE_STUDENT).order_by('first_name', 'username')
+    student_data = [
+        {'id': s.id, 'full_name': s.full_name, 'username': s.username}
+        for s in students
+    ]
+    data = UserGroupSerializer(group, context={'request': request}).data
+    data['students'] = student_data
+    data['student_count'] = len(student_data)
+    return Response(data)
+
+
+# ── AI Tool endpoints ────────────────────────────────────────────────────────
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def ai_chat(request):
+    """AI chat — prompt yuborish va javob olish."""
+    prompt = (request.data.get('prompt') or '').strip()
+    if not prompt:
+        return Response({'detail': 'Prompt kiritilishi shart.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    from .gemini import call_gemini, parse_json_response
+    result = call_gemini(prompt)
+    if not result['success']:
+        return Response({'detail': result['error']}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    parsed = parse_json_response(result['text'])
+    return Response({
+        'data': parsed or result['text'],
+        'raw': result['text'],
+    })
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def writing_feedback(request):
+    """Writing baholash — essay matnini Gemini orqali baholash."""
+    task_part = request.data.get('task_part')
+    essay_text = (request.data.get('essay_text') or '').strip()
+
+    if task_part not in (1, 2):
+        return Response({'detail': 'task_part 1 yoki 2 bo\'lishi kerak.'}, status=status.HTTP_400_BAD_REQUEST)
+    if len(essay_text.split()) < 10:
+        return Response({'detail': 'Essay juda qisqa (kamida 10 so\'z).'}, status=status.HTTP_400_BAD_REQUEST)
+
+    from .gemini import call_gemini, parse_json_response
+
+    word_target = 150 if task_part == 1 else 250
+    prompt = f"""You are an experienced IELTS examiner. Evaluate this Writing Task {task_part} response.
+Criteria: Task Achievement, Coherence & Cohesion, Lexical Resource, Grammatical Range & Accuracy.
+
+ESSAY:
+\"\"\"
+{essay_text}
+\"\"\"
+
+Target: ~{word_target} words. Return ONLY this JSON:
+{{
+  "taskAchievement": {{"band": <0-9, step 0.5>, "comment": "<short>"}},
+  "coherenceCohesion": {{"band": <0-9, step 0.5>, "comment": "<short>"}},
+  "lexicalResource": {{"band": <0-9, step 0.5>, "comment": "<short>"}},
+  "grammaticalRange": {{"band": <0-9, step 0.5>, "comment": "<short>"}},
+  "overallBand": <average rounded to 0.5>,
+  "wordCount": <number>,
+  "strengths": ["<strength>"],
+  "improvements": ["<improvement>"],
+  "summary": "<2-3 sentence summary>"
+}}"""
+
+    result = call_gemini(prompt, temperature=0.5)
+    if not result['success']:
+        return Response({'detail': result['error']}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    parsed = parse_json_response(result['text'])
+    if not parsed:
+        return Response({'detail': 'Javobni tushib bo\'lmadi.', 'raw': result['text']}, status=status.HTTP_502_BAD_GATEWAY)
+    return Response({'data': parsed})
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def speaking_feedback(request):
+    """Speaking baholash — transcript matnini Gemini orqali baholash."""
+    prompt = (request.data.get('prompt') or '').strip()
+    if not prompt:
+        return Response({'detail': 'Prompt kiritilishi shart.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    from .gemini import call_gemini, parse_json_response
+    result = call_gemini(prompt, temperature=0.5)
+    if not result['success']:
+        return Response({'detail': result['error']}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    parsed = parse_json_response(result['text'])
+    if not parsed:
+        return Response({'detail': 'Javobni tushib bo\'lmadi.', 'raw': result['text']}, status=status.HTTP_502_BAD_GATEWAY)
+    return Response({'data': parsed})
+

@@ -17,21 +17,39 @@ class Command(BaseCommand):
             default=os.environ.get('TEACHER_USERNAME', 'teacher'),
         )
         parser.add_argument(
+            '--email',
+            default=os.environ.get('TEACHER_EMAIL', ''),
+        )
+        parser.add_argument(
             '--password',
             default=None,
             help="Berilmasa TEACHER_PASSWORD muhit o'zgaruvchisidan olinadi.",
         )
+        parser.add_argument(
+            '--first-name',
+            default=os.environ.get('TEACHER_FIRST_NAME', 'Ustoz'),
+        )
+        parser.add_argument(
+            '--last-name',
+            default=os.environ.get('TEACHER_LAST_NAME', ''),
+        )
+        parser.add_argument(
+            '--force',
+            action='store_true',
+        )
 
     def handle(self, *args, **options):
         username = options['username']
+        email = options['email'] or f'{username}@admin.local'
 
-        if User.objects.filter(username=username).exists():
-            self.stdout.write(self.style.WARNING(f"Ustoz '{username}' allaqachon mavjud."))
-            return
+        existing = User.objects.filter(username=username).first()
+        if existing:
+            if options['force']:
+                existing.delete()
+            else:
+                self.stdout.write(self.style.WARNING(f"Ustoz '{username}' allaqachon mavjud."))
+                return
 
-        # MUHIM: ilgari bu yerda `teacher123` degan qattiq yozilgan default
-        # parol bor edi — entrypoint.sh har deployda shu buyruqni chaqirgani
-        # uchun prod'da superuser aynan o'sha ma'lum parol bilan yaratilardi.
         password = options['password'] or os.environ.get('TEACHER_PASSWORD', '')
         if not password:
             raise CommandError(
@@ -39,19 +57,16 @@ class Command(BaseCommand):
                 "akkaunti yaratilmadi. Kuchli parol o'rnating va qayta ishga "
                 "tushiring (yoki --password bilan uzating)."
             )
-        if len(password) < 12:
-            raise CommandError(
-                "TEACHER_PASSWORD kamida 12 belgidan iborat bo'lishi kerak."
-            )
 
         user = User.objects.create_user(
             username=username,
+            email=email,
             password=password,
-            first_name=os.environ.get('TEACHER_FIRST_NAME', 'Ustoz'),
-            last_name=os.environ.get('TEACHER_LAST_NAME', ''),
+            first_name=options['first_name'],
+            last_name=options['last_name'],
         )
         user.role = User.ROLE_TEACHER
         user.is_staff = True
         user.is_superuser = True
         user.save()
-        self.stdout.write(self.style.SUCCESS(f"Ustoz '{username}' yaratildi."))
+        self.stdout.write(self.style.SUCCESS(f"Ustoz '{username}' ({email}) yaratildi."))

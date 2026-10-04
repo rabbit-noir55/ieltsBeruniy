@@ -22,7 +22,7 @@
                 {% endif %}
             </h1>
             <p class="mt-1 text-sm text-black/50 dark:text-white/45">
-                @{{ student.username }} · Ro'yxatdan o'tgan: {{ student.date_joined|date:"d.m.Y" }}
+                {{ student.email }} · Ro'yxatdan o'tgan: {{ student.date_joined|date:"d.m.Y" }}
             </p>
             {% if last_activity %}
             <p class="mt-1 text-xs font-semibold text-black/40 dark:text-white/40">
@@ -71,8 +71,8 @@
         <div class="flex flex-wrap items-center justify-between gap-4">
             <div class="flex items-center gap-6">
                 <div>
-                    <div class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">Login</div>
-                    <div class="font-mono mt-1 text-lg font-bold text-black/80 dark:text-white/80">{{ student.username }}</div>
+                    <div class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">Email</div>
+                    <div class="font-mono mt-1 text-lg font-bold text-black/80 dark:text-white/80">{{ student.email }}</div>
                 </div>
                 <div>
                     <div class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">Parol</div>
@@ -81,6 +81,19 @@
                     {% else %}
                     <div class="mt-1 text-sm text-black/40 dark:text-white/40">Noma'lum — yangi parol o'rnating</div>
                     {% endif %}
+                </div>
+                <div>
+                    <div class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">Guruhi</div>
+                    <form method="post" action="{% url 'panel:set_student_group' student.id %}" class="mt-1">
+                        {% csrf_token %}
+                        <select name="group_id" onchange="this.form.submit()"
+                                class="rounded border border-black/10 bg-transparent px-2 py-1 text-sm font-semibold dark:border-white/15">
+                            <option value="" {% if not student.group %}selected{% endif %}>External</option>
+                            {% for g in all_groups %}
+                            <option value="{{ g.id }}" {% if student.group_id == g.id %}selected{% endif %}>{{ g.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </form>
                 </div>
             </div>
             <details class="panel-card border p-3">
@@ -191,5 +204,17 @@
     {% empty %}
     <div class="panel-card mt-6 p-12 text-center text-sm text-black/35 dark:text-white/30">Natijalar topilmadi</div>
     {% endfor %}
+
+    <!-- O'quvchini o'chirish -->
+    <div class="mt-6 panel-card p-5 border border-red-500/20">
+        <h3 class="text-sm font-bold text-red-500 mb-3">Xavfli zona</h3>
+        <form method="post" action="{% url 'panel:delete_student' student.id %}"
+              onsubmit="return confirm('Haqiqatan ham bu o\'quvchini o\'chirmoqchimisiz? Bu amal ortga qaytarib bo\'lmaydi!')">
+            {% csrf_token %}
+            <button type="submit" class="rounded-lg bg-red-500 px-4 py-2 text-sm font-bold text-white hover:bg-red-600 transition-colors">
+                O'quvchini o'chirish
+            </button>
+        </form>
+    </div>
 </div>
 {% endblock %}

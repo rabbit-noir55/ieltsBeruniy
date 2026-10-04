@@ -4,6 +4,38 @@ from django.db.models import Value
 from django.db.models.functions import Coalesce
 
 
+class UserGroup(models.Model):
+    GROUP_TYPE_IELTS = 'ielts'
+    GROUP_TYPE_ROUNDUP = 'roundup'
+    GROUP_TYPE_CHOICES = [
+        (GROUP_TYPE_IELTS, 'IELTS'),
+        (GROUP_TYPE_ROUNDUP, 'Round Up'),
+    ]
+
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=100, unique=True)
+    group_type = models.CharField(max_length=10, choices=GROUP_TYPE_CHOICES, default=GROUP_TYPE_IELTS)
+    logo = models.ImageField(upload_to='group_logos/', blank=True, null=True)
+    parameters = models.JSONField(default=dict, blank=True, help_text=(
+        'JSON parameters for this group, e.g. '
+        '{"ai_limit": 4, "mock_access": true, "show_logo": true}'
+    ))
+    ielts_date = models.DateTimeField(null=True, blank=True, help_text='IELTS test sanasi (countdown uchun)')
+    schedule_type = models.CharField(max_length=10, blank=True, default='', choices=[('', 'Belgilanmagan'), ('odd', 'Toq kunlar'), ('even', 'Juft kunlar')])
+    schedule_time = models.TimeField(null=True, blank=True, help_text='Dars vaqti')
+    description = models.TextField(blank=True, default='', help_text='Guruh haqida qisqacha ma\'lumot')
+    competition_url = models.URLField(max_length=500, blank=True, default='', help_text='Competition Google Sheet base URL (gid sizsiz)')
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+    def get_param(self, key, default=None):
+        return self.parameters.get(key, default)
+
+
 class User(AbstractUser):
     ROLE_STUDENT = 'student'
     ROLE_TEACHER = 'teacher'
@@ -12,9 +44,39 @@ class User(AbstractUser):
         (ROLE_TEACHER, 'Teacher'),
     ]
 
+    username = models.CharField(max_length=150, unique=True, blank=True, default='')
+    email = models.EmailField(unique=True, blank=False, default='')
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default=ROLE_STUDENT)
+    group = models.ForeignKey(
+        UserGroup, on_delete=models.SET_NULL, null=True, blank=True, related_name='users'
+    )
     is_blocked = models.BooleanField(default=False)
     password_plain = models.CharField(max_length=255, blank=True, default='')
+
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = []
+
+    class Meta:
+        ordering = ['email']
+
+    def __str__(self):
+        return self.email
+
+    def clean(self):
+        super().clean()
+        if not self.username and self.email:
+            base = self.email.split('@')[0].lower().replace('.', '').replace('-', '').replace('_', '')
+            username = base
+            counter = 1
+            while User.objects.filter(username=username).exclude(pk=self.pk).exists():
+                username = f'{base}{counter}'
+                counter += 1
+            self.username = username
+
+    def save(self, *args, **kwargs):
+        if not self.username and self.email:
+            self.clean()
+        super().save(*args, **kwargs)
 
     @property
     def full_name(self):
@@ -65,62 +127,6 @@ class TestResult(models.Model):
 
     def __str__(self):
         return f'{self.student} - {self.skill} s{self.series_id} t{self.test_num} p{self.part_num}'
-
-
-class News(models.Model):
-    title = models.CharField(max_length=200)
-    content = models.TextField()
-    image = models.ImageField(upload_to='news/', blank=True, null=True)
-    is_published = models.BooleanField(default=True)
-    published_at = models.DateTimeField(auto_now_add=True)
-    created_by = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='news'
-    )
-
-    class Meta:
-        ordering = ['-published_at', '-id']
-
-    def __str__(self):
-        return self.title
-
-
-class NewsReaction(models.Model):
-    LIKE = 'like'
-    DISLIKE = 'dislike'
-    REACTION_CHOICES = [
-        (LIKE, 'Like'),
-        (DISLIKE, 'Dislike'),
-    ]
-
-    news = models.ForeignKey(News, on_delete=models.CASCADE, related_name='reactions')
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='news_reactions')
-    reaction = models.CharField(max_length=10, choices=REACTION_CHOICES)
-    created_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        unique_together = [('news', 'user')]
-
-
-class NewsComment(models.Model):
-    news = models.ForeignKey(News, on_delete=models.CASCADE, related_name='comments')
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='news_comments')
-    text = models.TextField()
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['created_at']
-
-    def __str__(self):
-        return f'{self.user} - {self.text[:30]}'
-
-
-class NewsRead(models.Model):
-    news = models.ForeignKey(News, on_delete=models.CASCADE, related_name='reads')
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='news_reads')
-    viewed_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = [('news', 'user')]
 
 
 class TypingResult(models.Model):

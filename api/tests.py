@@ -1,12 +1,9 @@
-from unittest.mock import patch
-
 from django.core.cache import cache
 from django.urls import reverse
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient, APITestCase
 
-from . import views
-from .models import News, NewsComment, TestResult, User
+from .models import TestResult, User
 
 
 def authed_client(token):
@@ -15,18 +12,26 @@ def authed_client(token):
     return client
 
 
+def create_test_user(email, password='pass', **extra):
+    """create_user()_AbstractUser username talab qiladi, shuning uchun to'g'ridan create ishlatamiz."""
+    user = User(username=email.split('@')[0], email=email, **extra)
+    user.set_password(password)
+    user.save()
+    return user
+
+
 class ResultProtectionTests(APITestCase):
     """O'quvchi natijalarni soxtalashtirish yoki o'chira olmasligi kerak."""
 
     def setUp(self):
-        self.student = User.objects.create_user(
-            username='student', password='pass', role=User.ROLE_STUDENT
+        self.student = create_test_user(
+            'student@test.com', role=User.ROLE_STUDENT
         )
         self.student_token = Token.objects.create(user=self.student)
         self.client = authed_client(self.student_token)
 
-        self.teacher = User.objects.create_user(
-            username='teacher', password='pass', role=User.ROLE_TEACHER
+        self.teacher = create_test_user(
+            'teacher@test.com', role=User.ROLE_TEACHER
         )
         self.teacher_token = Token.objects.create(user=self.teacher)
 
@@ -89,9 +94,7 @@ class ResultProtectionTests(APITestCase):
         self.assertFalse(TestResult.objects.filter(pk=self.result.pk).exists())
 
     def test_student_cannot_modify_another_student_result(self):
-        other = User.objects.create_user(
-            username='other', password='pass', role=User.ROLE_STUDENT
-        )
+        other = create_test_user('other@test.com', role=User.ROLE_STUDENT)
         other_result = TestResult.objects.create(
             student=other, skill='listening', series_id=17, test_num=1, band=6.0
         )
@@ -103,8 +106,8 @@ class DailyLimitTests(APITestCase):
     """Writing/Speaking uchun kunlik limit DELETE orqali chetlab o'tilmasligi."""
 
     def setUp(self):
-        self.student = User.objects.create_user(
-            username='student', password='pass', role=User.ROLE_STUDENT
+        self.student = create_test_user(
+            'dl_student@test.com', role=User.ROLE_STUDENT
         )
         self.token = Token.objects.create(user=self.student)
         self.client.force_authenticate(user=self.student)
@@ -150,42 +153,42 @@ class AuthTests(APITestCase):
 
     def test_register_returns_token_and_creates_student(self):
         resp = self.client.post(reverse('register'), {
-            'username': 'newbie',
+            'email': 'newbie@test.com',
             'password': 'secretpass1',
             'first_name': 'Ali',
             'last_name': 'Vali',
         })
         self.assertEqual(resp.status_code, 201)
         self.assertIn('token', resp.data)
-        user = User.objects.get(username='newbie')
+        user = User.objects.get(email='newbie@test.com')
         self.assertEqual(user.role, User.ROLE_STUDENT)
         self.assertTrue(user.check_password('secretpass1'))
 
-    def test_register_duplicate_username_rejected(self):
-        User.objects.create_user(username='dup', password='pass123')
+    def test_register_duplicate_email_rejected(self):
+        create_test_user('dup@test.com')
         resp = self.client.post(reverse('register'), {
-            'username': 'dup',
+            'email': 'dup@test.com',
             'password': 'pass123',
         })
         self.assertEqual(resp.status_code, 400)
 
     def test_login_ok_and_bad_password(self):
-        User.objects.create_user(username='u', password='goodpass1')
+        create_test_user('loginuser@test.com', password='goodpass1')
         ok = self.client.post(reverse('login'), {
-            'username': 'u',
+            'email': 'loginuser@test.com',
             'password': 'goodpass1',
         })
         self.assertEqual(ok.status_code, 200)
         self.assertIn('token', ok.data)
 
         bad = self.client.post(reverse('login'), {
-            'username': 'u',
+            'email': 'loginuser@test.com',
             'password': 'wrongpass',
         })
         self.assertEqual(bad.status_code, 401)
 
     def test_me_requires_auth_and_patches_profile(self):
-        user = User.objects.create_user(username='student1', password='pass123')
+        user = create_test_user('student1@test.com')
         token = Token.objects.create(user=user)
         client = authed_client(token)
 
@@ -196,157 +199,3 @@ class AuthTests(APITestCase):
         self.assertEqual(resp.status_code, 200)
         user.refresh_from_db()
         self.assertEqual(user.first_name, 'Asad')
-
-
-class NewsTests(APITestCase):
-    """Reaksiyalar, izohlar va o'qilganlik hisobi."""
-
-    def setUp(self):
-        self.student = User.objects.create_user(
-            username='student', password='pass', role=User.ROLE_STUDENT
-        )
-        self.token = Token.objects.create(user=self.student)
-        self.client = authed_client(self.token)
-        self.news = News.objects.create(
-            title='Yangilik', content='Matn', is_published=True
-        )
-
-    def test_react_like_then_toggle_to_dislike_then_clear(self):
-        url = reverse('news_react', args=[self.news.pk])
-        like = self.client.post(url, {'reaction': 'like'})
-        self.assertEqual(like.status_code, 200)
-        self.assertEqual(like.data['my_reaction'], 'like')
-        self.assertEqual(like.data['like_count'], 1)
-
-        dislike = self.client.post(url, {'reaction': 'dislike'})
-        self.assertEqual(dislike.data['my_reaction'], 'dislike')
-        self.assertEqual(dislike.data['dislike_count'], 1)
-        self.assertEqual(dislike.data['like_count'], 0)
-
-        cleared = self.client.post(url, {'reaction': None}, format='json')
-        self.assertIsNone(cleared.data['my_reaction'])
-
-    def test_comment_create_and_delete_own(self):
-        url = reverse('news_comments', args=[self.news.pk])
-        created = self.client.post(url, {'text': 'Yaxshi post!'})
-        self.assertEqual(created.status_code, 201)
-        self.assertEqual(created.data['text'], 'Yaxshi post!')
-
-        comment_id = created.data['id']
-        deleted = self.client.delete(
-            reverse('news_comment_delete', args=[self.news.pk, comment_id])
-        )
-        self.assertEqual(deleted.status_code, 204)
-        self.assertFalse(NewsComment.objects.filter(pk=comment_id).exists())
-
-    def test_student_cannot_delete_others_comment(self):
-        other = User.objects.create_user(username='other', password='pass')
-        comment = NewsComment.objects.create(
-            news=self.news, user=other, text='boshqasining izohi'
-        )
-        resp = self.client.delete(
-            reverse('news_comment_delete', args=[self.news.pk, comment.pk])
-        )
-        self.assertEqual(resp.status_code, 403)
-        self.assertTrue(NewsComment.objects.filter(pk=comment.pk).exists())
-
-    def test_teacher_can_delete_any_comment(self):
-        other = User.objects.create_user(username='other', password='pass')
-        comment = NewsComment.objects.create(
-            news=self.news, user=other, text='izoh'
-        )
-        teacher = User.objects.create_user(
-            username='teacher', password='pass', role=User.ROLE_TEACHER
-        )
-        tclient = authed_client(Token.objects.create(user=teacher))
-        resp = tclient.delete(
-            reverse('news_comment_delete', args=[self.news.pk, comment.pk])
-        )
-        self.assertEqual(resp.status_code, 204)
-        self.assertFalse(NewsComment.objects.filter(pk=comment.pk).exists())
-
-    def test_unread_count_excludes_unpublished_and_mark_all_read(self):
-        News.objects.create(title='Ikkinchi', content='x', is_published=True)
-        News.objects.create(title='Nashr emas', content='x', is_published=False)
-
-        resp = self.client.get(reverse('news_unread_count'))
-        self.assertEqual(resp.data['unread'], 2)
-
-        marked = self.client.post(reverse('news_mark_all_read'))
-        self.assertEqual(marked.data['unread'], 0)
-
-
-class WritingFeedbackTests(APITestCase):
-    """AI baholash: auth, validatsiya va kunlik kvota."""
-
-    def setUp(self):
-        self.student = User.objects.create_user(
-            username='student', password='pass', role=User.ROLE_STUDENT
-        )
-        self.token = Token.objects.create(user=self.student)
-        self.client = authed_client(self.token)
-        cache.clear()
-
-    def _payload(self, **over):
-        data = {'task_part': 2, 'essay_text': 'Some essay text here.'}
-        data.update(over)
-        return data
-
-    def test_requires_auth(self):
-        resp = APIClient().post(reverse('writing_feedback'), self._payload())
-        self.assertEqual(resp.status_code, 401)
-
-    def test_invalid_task_part(self):
-        resp = self.client.post(
-            reverse('writing_feedback'), self._payload(task_part=3)
-        )
-        self.assertEqual(resp.status_code, 400)
-
-    def test_empty_essay(self):
-        resp = self.client.post(
-            reverse('writing_feedback'), self._payload(essay_text='   ')
-        )
-        self.assertEqual(resp.status_code, 400)
-
-    @patch('api.views.get_writing_feedback', return_value={
-        'success': True,
-        'data': {'overallBand': 7.0},
-        'provider_used': 'mock',
-        'degraded': False,
-    })
-    def test_success_increments_quota(self, mock_fb):
-        resp = self.client.post(reverse('writing_feedback'), self._payload())
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data['quota_used'], 1)
-        mock_fb.assert_called_once()
-
-    @patch('api.views.get_writing_feedback', return_value={
-        'success': False, 'error': 'busy',
-    })
-    def test_provider_failure_does_not_consume_quota(self, mock_fb):
-        resp = self.client.post(reverse('writing_feedback'), self._payload())
-        self.assertEqual(resp.status_code, 503)
-
-        mock_fb.return_value = {
-            'success': True,
-            'data': {'overallBand': 7.0},
-            'provider_used': 'mock',
-            'degraded': False,
-        }
-        ok = self.client.post(reverse('writing_feedback'), self._payload())
-        self.assertEqual(ok.status_code, 200)
-        self.assertEqual(ok.data['quota_used'], 1)
-
-    @patch('api.views.get_writing_feedback', return_value={
-        'success': True,
-        'data': {'overallBand': 7.0},
-        'provider_used': 'mock',
-        'degraded': False,
-    })
-    def test_daily_limit_blocks(self, mock_fb):
-        for _ in range(views.MAX_FEEDBACK_PER_DAY):
-            resp = self.client.post(reverse('writing_feedback'), self._payload())
-            self.assertEqual(resp.status_code, 200)
-
-        blocked = self.client.post(reverse('writing_feedback'), self._payload())
-        self.assertEqual(blocked.status_code, 429)

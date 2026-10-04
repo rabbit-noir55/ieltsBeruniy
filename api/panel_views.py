@@ -8,7 +8,7 @@ from django.db.models import Avg, Count, Max, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from .models import News, TestResult, TypingResult, User
+from .models import TestResult, TypingResult, User, UserGroup
 from .utils import optimize_image
 
 SKILL_LABELS = dict(TestResult.SKILL_CHOICES)
@@ -48,7 +48,7 @@ def login_view(request):
         else:
             username = request.POST.get('username', '')
             password = request.POST.get('password', '')
-            user = authenticate(username=username, password=password)
+            user = authenticate(username=username.strip().lower(), password=password)
             if user is not None and user.role == User.ROLE_TEACHER:
                 cache.delete(attempts_key)
                 auth_login(request, user)
@@ -74,7 +74,7 @@ def dashboard(request):
     query = request.GET.get('q', '').strip()
     if query:
         students = students.filter(
-            Q(username__icontains=query)
+            Q(email__icontains=query)
             | Q(first_name__icontains=query)
             | Q(last_name__icontains=query)
         )
@@ -124,6 +124,9 @@ def dashboard(request):
         'active_days': ACTIVE_WINDOW_DAYS,
         'skills': skills_avg,
     }
+    all_groups = UserGroup.objects.annotate(
+        student_count=Count('users', filter=Q(users__role=User.ROLE_STUDENT))
+    ).order_by('name')
     context = {
         'students': students,
         'query': query,
@@ -131,6 +134,7 @@ def dashboard(request):
         'recent': recent,
         'now_7d_ago': timezone.now() - timedelta(days=ACTIVE_WINDOW_DAYS),
         'SKILL_LABELS': SKILL_LABELS,
+        'all_groups': all_groups,
     }
     return render(request, 'panel/dashboard.html', context)
 
@@ -209,6 +213,7 @@ def student_detail(request, student_id):
         'overall_avg': overall_avg,
         'overall_best': overall_best,
         'last_activity': last_activity,
+        'all_groups': UserGroup.objects.order_by('name'),
     }
     return render(request, 'panel/student_detail.html', context)
 
@@ -250,76 +255,132 @@ def set_student_password(request, student_id):
     return redirect('panel:student_detail', student_id=student.id)
 
 
-# ── News CRUD (teacher panel) ─────────────────────────────────────────────────
+# ── O'quvchini o'chirish ─────────────────────────────────────────────────────
 
 @login_required
 @user_passes_test(is_teacher, login_url='panel:login')
-def news_list(request):
-    news = News.objects.annotate(
-        like_count=Count('reactions', filter=Q(reactions__reaction='like')),
-        comment_count=Count('comments'),
-        read_count=Count('reads'),
-    ).order_by('-published_at')
-    return render(request, 'panel/news_list.html', {'news_list': news})
+def delete_student(request, student_id):
+    student = get_object_or_404(User, id=student_id, role=User.ROLE_STUDENT)
+    if request.method == 'POST':
+        student.delete()
+    return redirect('panel:dashboard')
+
+
+# ── O'quvchi guruhini o'rnatish ───────────────────────────────────────────────
+
+@login_required
+@user_passes_test(is_teacher, login_url='panel:login')
+def set_student_group(request, student_id):
+    student = get_object_or_404(User, id=student_id, role=User.ROLE_STUDENT)
+    if request.method == 'POST':
+        group_id = request.POST.get('group_id', '').strip()
+        if group_id:
+            group = get_object_or_404(UserGroup, id=group_id)
+            student.group = group
+        else:
+            student.group = None
+        student.save(update_fields=['group'])
+    return redirect('panel:student_detail', student_id=student.id)
+
+
+# ── Guruhlar CRUD ───────────────────────────────────────────────────────────
+
+@login_required
+@user_passes_test(is_teacher, login_url='panel:login')
+def group_list(request):
+    groups = UserGroup.objects.annotate(
+        student_count=Count('users', filter=Q(users__role=User.ROLE_STUDENT))
+    ).order_by('name')
+    return render(request, 'panel/group_list.html', {'groups': groups})
 
 
 @login_required
 @user_passes_test(is_teacher, login_url='panel:login')
-def news_add(request):
+def group_add(request):
     error = None
     if request.method == 'POST':
-        title = (request.POST.get('title') or '').strip()
-        content = (request.POST.get('content') or '').strip()
-        is_published = request.POST.get('is_published') == 'on'
-        if not title:
-            error = 'Sarlavha kiritilishi shart.'
+        name = (request.POST.get('name') or '').strip()
+        slug = (request.POST.get('slug') or '').strip()
+        group_type = request.POST.get('group_type', 'ielts')
+        ai_limit = request.POST.get('ai_limit', '2')
+        mock_access = request.POST.get('mock_access') == 'on'
+        show_logo = request.POST.get('show_logo') == 'on'
+        if not name:
+            error = 'Guruhi nomi kiritilishi shart.'
+        elif not slug:
+            error = 'Slug kiritilishi shart.'
         else:
-            image = optimize_image(request.FILES.get('image'))
-            News.objects.create(
-                title=title,
-                content=content,
-                image=image,
-                is_published=is_published,
-                created_by=request.user,
+            logo = optimize_image(request.FILES.get('logo'))
+            UserGroup.objects.create(
+                name=name,
+                slug=slug,
+                group_type=group_type,
+                logo=logo,
+                parameters={
+                    'ai_limit': int(ai_limit) if ai_limit.isdigit() else 2,
+                    'mock_access': mock_access,
+                    'show_logo': show_logo,
+                },
+                ielts_date=request.POST.get('ielts_date') or None,
+                schedule_type=request.POST.get('schedule_type', ''),
+                schedule_time=request.POST.get('schedule_time') or None,
+                description=(request.POST.get('description') or '').strip(),
+                competition_url=(request.POST.get('competition_url') or '').strip(),
             )
-            return redirect('panel:news_list')
-    return render(request, 'panel/news_form.html', {'action': 'Add', 'news': None, 'error': error})
+            return redirect('panel:group_list')
+    return render(request, 'panel/group_form.html', {'action': 'Add', 'group': None, 'error': error})
 
 
 @login_required
 @user_passes_test(is_teacher, login_url='panel:login')
-def news_edit(request, news_id):
-    news = get_object_or_404(News, id=news_id)
+def group_edit(request, group_id):
+    group = get_object_or_404(UserGroup, id=group_id)
     error = None
     if request.method == 'POST':
-        title = (request.POST.get('title') or '').strip()
-        content = (request.POST.get('content') or '').strip()
-        is_published = request.POST.get('is_published') == 'on'
-        remove_image = request.POST.get('remove_image') == 'on'
-        if not title:
-            error = 'Sarlavha kiritilishi shart.'
+        name = (request.POST.get('name') or '').strip()
+        slug = (request.POST.get('slug') or '').strip()
+        group_type = request.POST.get('group_type', 'ielts')
+        ai_limit = request.POST.get('ai_limit', '2')
+        mock_access = request.POST.get('mock_access') == 'on'
+        show_logo = request.POST.get('show_logo') == 'on'
+        remove_logo = request.POST.get('remove_logo') == 'on'
+        if not name:
+            error = 'Guruhi nomi kiritilishi shart.'
+        elif not slug:
+            error = 'Slug kiritilishi shart.'
         else:
-            news.title = title
-            news.content = content
-            news.is_published = is_published
-            if remove_image:
-                news.image.delete(save=False)
-                news.image = None
-            image_file = request.FILES.get('image')
-            if image_file:
-                news.image = optimize_image(image_file)
-            news.save()
-            return redirect('panel:news_list')
-    return render(request, 'panel/news_form.html', {
-        'action': 'Edit', 'news': news, 'error': error,
-    })
+            group.name = name
+            group.slug = slug
+            group.group_type = group_type
+            group.parameters = {
+                'ai_limit': int(ai_limit) if ai_limit.isdigit() else 2,
+                'mock_access': mock_access,
+                'show_logo': show_logo,
+            }
+            group.ielts_date = request.POST.get('ielts_date') or None
+            group.schedule_type = request.POST.get('schedule_type', '')
+            group.schedule_time = request.POST.get('schedule_time') or None
+            group.description = (request.POST.get('description') or '').strip()
+            group.competition_url = (request.POST.get('competition_url') or '').strip()
+            if remove_logo and group.logo:
+                group.logo.delete(save=False)
+                group.logo = None
+            logo_file = request.FILES.get('logo')
+            if logo_file:
+                group.logo = optimize_image(logo_file)
+            group.save()
+            return redirect('panel:group_list')
+    return render(request, 'panel/group_form.html', {'action': 'Edit', 'group': group, 'error': error})
 
 
 @login_required
 @user_passes_test(is_teacher, login_url='panel:login')
-def news_delete(request, news_id):
-    news = get_object_or_404(News, id=news_id)
+def group_delete(request, group_id):
+    group = get_object_or_404(UserGroup, id=group_id)
     if request.method == 'POST':
-        news.image.delete(save=False)
-        news.delete()
-    return redirect('panel:news_list')
+        # Users in this group get group set to NULL
+        group.users.update(group=None)
+        if group.logo:
+            group.logo.delete(save=False)
+        group.delete()
+    return redirect('panel:group_list')

@@ -17,6 +17,10 @@
             <div class="font-display mt-1 text-3xl font-bold">{{ summary.students }}</div>
         </div>
         <div class="panel-card p-5">
+            <div class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">Guruhlar</div>
+            <div class="font-display mt-1 text-3xl font-bold">{{ all_groups|length }}</div>
+        </div>
+        <div class="panel-card p-5">
             <div class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">Natijalar</div>
             <div class="font-display mt-1 text-3xl font-bold">{{ summary.results }}</div>
         </div>
@@ -24,12 +28,23 @@
             <div class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">O'rtacha band</div>
             <div class="font-display mt-1 text-3xl font-bold">{% if summary.avg_band %}{{ summary.avg_band|floatformat:1 }}{% else %}—{% endif %}</div>
         </div>
-        <div class="panel-card p-5">
-            <div class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">So'nggi {{ summary.active_days }} kun</div>
-            <div class="font-display mt-1 text-3xl font-bold">{{ summary.active_7d }}</div>
-            <div class="text-xs text-black/40 dark:text-white/40">faol o'quvchi</div>
-        </div>
     </div>
+
+    <!-- Guruhlar qisqacha -->
+    {% if all_groups %}
+    <div class="mt-4 flex flex-wrap gap-2">
+        {% for g in all_groups %}
+        <a href="{% url 'panel:group_list' %}"
+           class="panel-card flex items-center gap-2 px-3 py-2 transition hover:scale-[1.02]">
+            {% if g.logo %}
+            <img src="{{ g.logo.url }}" class="h-6 w-6 rounded-md object-cover">
+            {% endif %}
+            <span class="text-sm font-semibold">{{ g.name }}</span>
+            <span class="rounded-full bg-black/[0.06] px-2 py-0.5 text-[11px] font-bold text-black/40 dark:bg-white/[0.08] dark:text-white/40">{{ g.student_count }}</span>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
 
     <!-- Skill'lar bo'yicha o'rtacha band -->
     <div class="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -125,6 +140,7 @@
             <thead>
                 <tr>
                     <th>O'quvchi</th>
+                    <th>Guruhi</th>
                     <th class="text-center">Natijalar</th>
                     {% for skill, label in SKILL_LABELS.items %}
                     <th class="text-center">{{ label }}</th>
@@ -147,7 +163,19 @@
                             </span>
                             {% endif %}
                         </div>
-                        <div class="text-xs text-black/40 dark:text-white/40">@{{ s.username }}</div>
+                        <div class="text-xs text-black/40 dark:text-white/40">{{ s.email }}</div>
+                    </td>
+                    <td>
+                        <form method="post" action="{% url 'panel:set_student_group' s.id %}" class="inline">
+                            {% csrf_token %}
+                            <select name="group_id" onchange="this.form.submit()"
+                                    class="rounded border border-black/10 bg-transparent px-2 py-1 text-xs dark:border-white/15">
+                                <option value="" {% if not s.group %}selected{% endif %}>External</option>
+                                {% for g in all_groups %}
+                                <option value="{{ g.id }}" {% if s.group_id == g.id %}selected{% endif %}>{{ g.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </form>
                     </td>
                     <td class="text-center font-semibold text-black/60 dark:text-white/60">{{ s.results_count }}</td>
                     {% for skill, label in SKILL_LABELS.items %}
