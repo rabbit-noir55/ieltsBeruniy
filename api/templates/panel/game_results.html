@@ -1,0 +1,59 @@
+{% extends "panel/base.html" %}
+{% block title %}{{ game.title }} — natijalar{% endblock %}
+{% block body %}
+<div class="mx-auto max-w-5xl px-4 py-8">
+    <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+            <span class="kicker"><span class="dot"><span class="ping"></span><span class="core"></span></span>Öyinlar</span>
+            <h1 class="font-display mt-3 text-3xl font-bold">{{ game.title }}</h1>
+            <p class="mt-1 text-sm text-black/50 dark:text-white/45">
+                Öyin yuborgan ma'lumotlar · jami {{ total }}
+            </p>
+        </div>
+        <div class="flex gap-2">
+            <a href="{% url 'panel:game_edit' game.id %}" class="panel-btn panel-btn-ghost">Tahrirlaş</a>
+            <a href="{% url 'panel:game_list' %}" class="panel-btn panel-btn-ghost">Röyxatga qaytiş</a>
+        </div>
+    </div>
+
+    <div class="mb-4 rounded-xl border border-black/[0.08] bg-black/[0.02] px-4 py-3 text-xs text-black/50 dark:border-white/10 dark:bg-white/[0.03] dark:text-white/45">
+        Server bu ma'lumotni tahlil qilmaydi — faqat saqlaydi. Format öyinning özida belgilanadi.
+    </div>
+
+    {% if results %}
+    <div class="panel-card overflow-hidden">
+        <table class="w-full text-sm">
+            <thead class="border-b border-black/[0.06] text-left text-xs uppercase tracking-wide text-black/40 dark:border-white/[0.06] dark:text-white/40">
+                <tr>
+                    <th class="px-4 py-3 w-1/4">Öquvçi</th>
+                    <th class="px-4 py-3">Ma'lumot</th>
+                    <th class="px-4 py-3 w-40 text-right">Vaqt</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in results %}
+                <tr class="border-b border-black/[0.05] align-top last:border-0 dark:border-white/[0.05]">
+                    <td class="px-4 py-3">
+                        <div class="font-semibold">{{ r.user.get_full_name|default:r.user.username|default:"—" }}</div>
+                        <div class="text-[11px] text-black/40 dark:text-white/40">{{ r.user.email }}</div>
+                    </td>
+                    <td class="px-4 py-3">
+                        <pre class="max-h-32 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-black/[0.03] p-2 font-mono text-[11px] dark:bg-white/[0.04]">{{ r.data|default:"—" }}</pre>
+                    </td>
+                    <td class="px-4 py-3 text-right text-xs text-black/45 dark:text-white/45">
+                        {{ r.created_at|date:"d.m.Y H:i" }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="panel-card px-6 py-14 text-center">
+        <div class="text-4xl opacity-25">📭</div>
+        <h3 class="font-display mt-3 text-lg font-bold">Hali natija yöq</h3>
+        <p class="mt-1 text-sm text-black/45 dark:text-white/45">Öquvçilar öyinni öynagaç şu yerda körinadi.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

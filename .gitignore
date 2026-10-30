@@ -8,3 +8,4 @@ staticfiles/
 media/
 server.log
 server_log.txt
+server_run.log

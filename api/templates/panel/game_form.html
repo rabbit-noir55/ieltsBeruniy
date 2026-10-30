@@ -1,0 +1,176 @@
+{% extends "panel/base.html" %}
+{% block title %}{% if game %}Öyinni almaştiriş{% else %}Yangi öyin{% endif %}{% endblock %}
+{% block body %}
+<div class="mx-auto max-w-3xl px-4 py-8">
+    <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+            <span class="kicker"><span class="dot"><span class="ping"></span><span class="core"></span></span>Öyinlar</span>
+            <h1 class="font-display mt-3 text-3xl font-bold">
+                {% if game %}{{ game.title }}{% else %}Yangi öyin{% endif %}
+            </h1>
+            <p class="mt-1 text-sm text-black/50 dark:text-white/45">
+                Faylni yuklang — nom, tavsif va sozlamalar uning içidan olinadi
+            </p>
+        </div>
+        <a href="{% url 'panel:game_list' %}" class="panel-btn panel-btn-ghost">Röyxatga qaytiş</a>
+    </div>
+
+    {% if error %}
+    <div class="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-700 dark:text-red-400">
+        {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" class="space-y-6">
+        {% csrf_token %}
+
+        <div class="panel-card p-5">
+            <h2 class="font-display mb-1 text-lg font-bold">1. AI uçun muhit tavsifi</h2>
+            <p class="mb-3 text-xs text-black/50 dark:text-white/45">
+                Nusxalab, öyin ğoyangiz bilan birga Claude / ChatGPT / Gemini ga taşlang.
+                AI professional, töliq öyin yozadi va tayyor <code>.html</code> fayl qaytaradi
+                (janr erkin: şaxmat, karta, arcade, quiz...).
+            </p>
+
+            <details class="rounded-xl border border-black/[0.08] bg-black/[0.02] p-3 dark:border-white/10 dark:bg-white/[0.03]">
+                <summary class="cursor-pointer text-sm font-bold text-black/70 dark:text-white/70">
+                    Tavsifni oçiş / nusxalaş
+                </summary>
+                <textarea id="aiPrompt" readonly rows="12"
+                          class="panel-input mt-3 font-mono !text-[11px]">{{ external_prompt }}</textarea>
+                <button type="button" id="copyPrompt" class="panel-btn panel-btn-primary mt-2 !text-xs">
+                    Nusxalaş
+                </button>
+                <span id="copyStatus" class="ml-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400"></span>
+            </details>
+        </div>
+
+        <div class="panel-card p-5">
+            <h2 class="font-display mb-1 text-lg font-bold">2. Öyin fayli</h2>
+            <p class="mb-4 text-xs text-black/50 dark:text-white/45">
+                AI bergan <code>.html</code> faylni tanlang. Nom, tavsif, vaqt va hamma sozlama
+                faylning boşidagi <code>&lt;!-- ourgame-meta ... --&gt;</code> blokidan olinadi.
+            </p>
+
+            <label for="htmlFile"
+                   class="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-black/15 bg-black/[0.02] px-4 py-10 text-center transition hover:border-[var(--accent)]/50 hover:bg-[var(--accent)]/[0.04] dark:border-white/15 dark:bg-white/[0.03]">
+                <span class="text-3xl">📄</span>
+                <span class="text-sm font-bold">HTML faylni tanlaş</span>
+                <span class="text-xs text-black/45 dark:text-white/45">yoki faylni şu yerga taşlang</span>
+                <input type="file" id="htmlFile" name="html_file" accept=".html,.htm,text/html" class="hidden">
+            </label>
+            <div id="fileName" class="mt-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400"></div>
+            <div id="fileMeta" class="mt-1 text-xs text-black/45 dark:text-white/45"></div>
+
+            <div class="mt-5 flex items-center gap-2">
+                <button type="submit" class="panel-btn panel-btn-primary">
+                    {% if game %}Faylni almaştiriş{% else %}Qöşiş{% endif %}
+                </button>
+                <span class="text-xs text-black/40 dark:text-white/40">
+                    Fayl talablarga mos bölmasa — qöşilmaydi
+                </span>
+            </div>
+        </div>
+    </form>
+
+    <div class="panel-card mt-6 p-5">
+        <h2 class="font-display mb-1 text-lg font-bold">Öyinni sinaş</h2>
+        <p class="mb-3 text-xs text-black/50 dark:text-white/45">
+            Yuklaşdan oldin faylni <b>Game Tester</b> extensionida oçib köring — u demo
+            config va demo öquvçi bilan xuddi saytdagi kabi işga tuşiradi.
+        </p>
+        <ol class="list-decimal space-y-1 pl-5 text-xs text-black/55 dark:text-white/55">
+            <li>Chrome → <code>chrome://extensions</code> → <b>Developer mode</b> → <b>Load unpacked</b></li>
+            <li><code>game-tester-extension</code> papkasini tanlang</li>
+            <li>Extensionni oçib, HTML faylni taşlang — öyin demo rejimda işlaydi</li>
+            <li>Natija yaxşi bölsa, şu sahifada faylni yuklang</li>
+        </ol>
+    </div>
+</div>
+
+<script>
+(function () {
+  const fileEl = document.getElementById('htmlFile');
+  const fileName = document.getElementById('fileName');
+  const fileMeta = document.getElementById('fileMeta');
+
+  function parseMeta(text) {
+    const out = {};
+    const m = String(text || '').match(/<!--\s*ourgame-meta\s*(\{[\s\S]*?\})\s*-->/i);
+    if (m) {
+      try {
+        const data = JSON.parse(m[1]);
+        if (data && typeof data === 'object') {
+          if (data.title) out.title = String(data.title);
+          if (data.description) out.description = String(data.description);
+          if (data.config) out.config = data.config;
+        }
+      } catch (e) { /* buzilgan JSON */ }
+    }
+    if (!out.title) {
+      const t = String(text || '').match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+      if (t) out.title = t[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 150);
+    }
+    return out;
+  }
+
+  function loadFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function () {
+      const text = String(reader.result || '');
+      const meta = parseMeta(text);
+      fileName.textContent = 'Yuklandi: ' + file.name + ' · ' + Math.round(text.length / 1024) + ' KB';
+      const bits = [];
+      if (meta.title) bits.push('nom: ' + meta.title);
+      if (meta.config && meta.config.time_limit) bits.push('vaqt: ' + meta.config.time_limit + 's');
+      fileMeta.textContent = bits.length ? bits.join(' · ') : 'ourgame-meta topilmadi — fayl qöşilmaydi.';
+      if (!meta.title) fileMeta.className = 'mt-1 text-xs font-semibold text-red-600 dark:text-red-400';
+      else fileMeta.className = 'mt-1 text-xs text-black/45 dark:text-white/45';
+    };
+    reader.readAsText(file);
+  }
+
+  if (fileEl) {
+    fileEl.addEventListener('change', function () {
+      loadFile(fileEl.files && fileEl.files[0]);
+    });
+  }
+
+  const dropZone = document.querySelector('label[for="htmlFile"]');
+  if (dropZone) {
+    ['dragover', 'dragenter'].forEach(function (ev) {
+      dropZone.addEventListener(ev, function (e) { e.preventDefault(); });
+    });
+    dropZone.addEventListener('drop', function (e) {
+      e.preventDefault();
+      const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!file) return;
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      fileEl.files = dt.files;
+      loadFile(file);
+    });
+  }
+
+  const copyBtn = document.getElementById('copyPrompt');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', async function () {
+      const area = document.getElementById('aiPrompt');
+      const status = document.getElementById('copyStatus');
+      try {
+        await navigator.clipboard.writeText(area.value);
+        status.textContent = 'Nusxalandi ✓';
+      } catch (e) {
+        area.removeAttribute('readonly');
+        area.select();
+        document.execCommand('copy');
+        area.setAttribute('readonly', 'readonly');
+        status.textContent = 'Nusxalandi ✓';
+      }
+      setTimeout(function () { status.textContent = ''; }, 2500);
+    });
+  }
+})();
+</script>
+{% endblock %}

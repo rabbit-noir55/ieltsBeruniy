@@ -1,5 +1,5 @@
 {% extends "panel/base.html" %}
-{% block title %}{% if action == 'Add' %}Yangi guruh{% else %}{{ group.name }} — Tahrirlash{% endif %}{% endblock %}
+{% block title %}{% if action == 'Add' %}Yangi guruh{% else %}{{ group.name }} — Tahrirlaş{% endif %}{% endblock %}
 {% block body %}
 <div class="mx-auto max-w-2xl px-4 py-8">
     <!-- Sarlavha -->
@@ -10,7 +10,7 @@
         </a>
     </div>
     <h1 class="font-display mt-2 text-3xl font-bold">
-        {% if action == 'Add' %}Yangi guruh yaratish{% else %}{{ group.name }} — Tahrirlash{% endif %}
+        {% if action == 'Add' %}Yangi guruh yaratiş{% else %}{{ group.name }} — Tahrirlaş{% endif %}
     </h1>
 
     {% if error %}
@@ -42,22 +42,22 @@
 
         <!-- Slug -->
         <div class="mb-4">
-            <label for="slug" class="mb-1 block text-xs font-semibold text-black/50 dark:text-white/50">Slug (URL do'st nom)</label>
+            <label for="slug" class="mb-1 block text-xs font-semibold text-black/50 dark:text-white/50">Slug (URL döst nom)</label>
             <input type="text" id="slug" name="slug" value="{{ group.slug|default:'' }}" required
                    placeholder="masalan: g13, round-up-2"
                    pattern="[a-z0-9\-]+" class="panel-input font-mono">
-            <p class="mt-1 text-xs text-black/30 dark:text-white/30">Faqat kichik harflar, raqamlar va defis. Masalan: <code>ielts-group</code></p>
+            <p class="mt-1 text-xs text-black/30 dark:text-white/30">Faqat kiçik harflar, raqamlar va defis. Masalan: <code>ielts-group</code></p>
         </div>
 
         <!-- Logo — faqat IELTS -->
         <div class="mb-4" id="field-logo">
             <label class="mb-1 block text-xs font-semibold text-black/50 dark:text-white/50">Logo (ixtiyoriy)</label>
-            {% if group.logo %}
+            {% if group.logo_url %}
             <div class="mb-2 flex items-center gap-3">
-                <img src="{{ group.logo.url }}" alt="Logo" class="h-12 w-12 rounded-lg object-cover">
+                <img src="{{ group.logo_url }}" alt="Logo" class="h-12 w-12 rounded-lg object-cover">
                 <label class="flex items-center gap-1.5 text-xs text-black/50 dark:text-white/40">
                     <input type="checkbox" name="remove_logo" class="rounded">
-                    O'chirish
+                    Öçiriş
                 </label>
             </div>
             {% endif %}
@@ -75,7 +75,7 @@
                 <input type="number" id="ai_limit" name="ai_limit"
                        value="{{ group.parameters.ai_limit|default:'2' }}" min="1" max="99"
                        class="panel-input max-w-[120px]">
-                <p class="mt-1 text-xs text-black/30 dark:text-white/30">Har bir o'quvchi kuniga nechta AI baholash olishi mumkin</p>
+                <p class="mt-1 text-xs text-black/30 dark:text-white/30">Har bir öquvçi kuniga neçta AI baholaş olişi mumkin</p>
             </div>
 
             <!-- Mock kirish — faqat IELTS -->
@@ -83,7 +83,7 @@
                 <input type="checkbox" id="mock_access" name="mock_access"
                        {% if group.parameters.mock_access %}checked{% endif %}
                        class="h-4 w-4 rounded">
-                <label for="mock_access" class="text-sm font-semibold text-black/60 dark:text-white/60">Mock testlarga kirish</label>
+                <label for="mock_access" class="text-sm font-semibold text-black/60 dark:text-white/60">Mock testlarga kiriş</label>
             </div>
 
             <!-- Logo ko'rsatish — faqat IELTS -->
@@ -91,7 +91,7 @@
                 <input type="checkbox" id="show_logo" name="show_logo"
                        {% if group.parameters.show_logo %}checked{% endif %}
                        class="h-4 w-4 rounded">
-                <label for="show_logo" class="text-sm font-semibold text-black/60 dark:text-white/60">Header'da logoni ko'rsatish</label>
+                <label for="show_logo" class="text-sm font-semibold text-black/60 dark:text-white/60">Header'da logoni körsatiş</label>
             </div>
         </div>
 
@@ -105,7 +105,7 @@
                 <input type="datetime-local" id="ielts_date" name="ielts_date"
                        value="{{ group.ielts_date|date:'Y-m-d\TH:i'|default:'' }}"
                        class="panel-input max-w-[250px]">
-                <p class="mt-1 text-xs text-black/30 dark:text-white/30">Header'da countdown ko'rsatiladi</p>
+                <p class="mt-1 text-xs text-black/30 dark:text-white/30">Header'da countdown körsatiladi</p>
             </div>
 
             <!-- Tavsif -->
@@ -118,12 +118,12 @@
 
             <!-- Competition havolasi -->
             <div class="mb-3">
-                <label for="competition_url" class="mb-1 block text-xs font-semibold text-black/50 dark:text-white/50">Competition Google Sheet URL</label>
+                <label for="competition_url" class="mb-1 block text-xs font-semibold text-black/50 dark:text-white/50">Competition Google Şeet URL</label>
                 <input type="url" id="competition_url" name="competition_url"
                        value="{{ group.competition_url|default:'' }}"
                        placeholder="https://docs.google.com/spreadsheets/d/SHEET_ID/edit"
                        class="panel-input">
-                <p class="mt-1 text-xs text-black/30 dark:text-white/30">Har bir guruhning o'z competition jadvali. Bo'sh qoldirsangiz, competition ko'rsatilmaydi.</p>
+                <p class="mt-1 text-xs text-black/30 dark:text-white/30">Har bir guruhning öz competition jadvali. Böş qoldirsangiz, competition körsatilmaydi.</p>
             </div>
 
             <!-- Dars jadvali -->
@@ -148,9 +148,9 @@
         <!-- Tugmalar -->
         <div class="flex items-center gap-3">
             <button type="submit" class="panel-btn panel-btn-primary">
-                {% if action == 'Add' %}Yaratish{% else %}Saqlash{% endif %}
+                {% if action == 'Add' %}Yaratiş{% else %}Saqlaş{% endif %}
             </button>
-            <a href="{% url 'panel:group_list' %}" class="panel-btn panel-btn-ghost">Bekor qilish</a>
+            <a href="{% url 'panel:group_list' %}" class="panel-btn panel-btn-ghost">Bekor qiliş</a>
         </div>
     </form>
 </div>

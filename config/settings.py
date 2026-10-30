@@ -219,6 +219,11 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# ── Frontend manzili (admin panel preview havolasi uchun) ──────────────────
+FRONTEND_URL = os.environ.get('FRONTEND_URL', '') or (
+    'http://localhost:5173' if DEBUG else ''
+)
+
 # ── Media (rasmlar) storage ────────────────────────────────────────────────
 # Supabase Storage (S3-mos) env'lar bo'lsa ishlaydi, bo'lmasa lokal fayl
 # tizimiga tushadi (dev rejim uchun).

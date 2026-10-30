@@ -37,10 +37,11 @@ class UserGroupSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
     def get_logo_url(self, obj):
-        if obj.logo:
-            request = self.context.get('request')
-            return request.build_absolute_uri(obj.logo.url) if request else obj.logo.url
-        return None
+        url = obj.logo_url
+        if not url or url.startswith('data:'):
+            return url or None
+        request = self.context.get('request')
+        return request.build_absolute_uri(url) if request else url
 
 
 class UserGroupBriefSerializer(serializers.ModelSerializer):
@@ -52,10 +53,11 @@ class UserGroupBriefSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'slug', 'group_type', 'logo_url', 'parameters', 'ielts_date', 'competition_url']
 
     def get_logo_url(self, obj):
-        if obj.logo:
-            request = self.context.get('request')
-            return request.build_absolute_uri(obj.logo.url) if request else obj.logo.url
-        return None
+        url = obj.logo_url
+        if not url or url.startswith('data:'):
+            return url or None
+        request = self.context.get('request')
+        return request.build_absolute_uri(url) if request else url
 
 
 class UserSerializer(serializers.ModelSerializer):

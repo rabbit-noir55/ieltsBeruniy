@@ -1,0 +1,104 @@
+{% extends "panel/base.html" %}
+{% block title %}Our Mock{% endblock %}
+{% block body %}
+<div class="mx-auto max-w-6xl px-4 py-8">
+    <div class="mb-8 flex flex-wrap items-end justify-between gap-3">
+        <div>
+            <span class="kicker"><span class="dot"><span class="ping"></span><span class="core"></span></span>Admin paneli</span>
+            <h1 class="font-display mt-3 text-3xl font-bold">Our Mock</h1>
+            <p class="mt-1 text-sm text-black/50 dark:text-white/45">Ustoz qöşgan listening va reading testlari</p>
+        </div>
+        <a href="{% url 'panel:mock_add' %}" class="panel-btn panel-btn-primary">
+            <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            Yangi mock
+        </a>
+    </div>
+
+    {% if request.GET.saved %}
+    <div class="mb-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+        Mock {{ request.GET.saved }} ({{ request.GET.skill }}) saqlandi va saytda körinyapti.
+    </div>
+    {% endif %}
+
+    {% if grouped %}
+    <div class="panel-card overflow-hidden">
+        <table class="w-full text-sm">
+            <thead class="border-b border-black/[0.06] text-left text-xs uppercase tracking-wide text-black/40 dark:border-white/[0.06] dark:text-white/40">
+                <tr>
+                    <th class="px-4 py-3">Mock</th>
+                    <th class="px-4 py-3">Listening</th>
+                    <th class="px-4 py-3">Reading</th>
+                    <th class="px-4 py-3 text-right">Amallar</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for series, skills in grouped.items %}
+                <tr class="border-b border-black/[0.05] last:border-0 dark:border-white/[0.05]">
+                    <td class="px-4 py-3 font-display text-base font-bold">Mock {{ series }}</td>
+                    <td class="px-4 py-3">
+                        {% with m=skills.listening %}
+                        {% if m %}
+                            <div class="font-semibold">{{ m.question_count }} savol</div>
+                            <div class="text-xs text-black/40 dark:text-white/40">{{ m.title|default:"—" }}</div>
+                        {% else %}
+                            <span class="text-xs text-black/30 dark:text-white/30">yöq</span>
+                        {% endif %}
+                        {% endwith %}
+                    </td>
+                    <td class="px-4 py-3">
+                        {% with m=skills.reading %}
+                        {% if m %}
+                            <div class="font-semibold">{{ m.question_count }} savol</div>
+                            <div class="text-xs text-black/40 dark:text-white/40">{{ m.title|default:"—" }}</div>
+                        {% else %}
+                            <span class="text-xs text-black/30 dark:text-white/30">yöq</span>
+                        {% endif %}
+                        {% endwith %}
+                    </td>
+                    <td class="px-4 py-3">
+                        <div class="flex flex-wrap items-center justify-end gap-2">
+                            {% if skills.listening and frontend_url %}
+                            <a href="{{ frontend_url }}/mock/{{ series }}/1/listening/1" target="_blank"
+                               class="panel-btn panel-btn-ghost !px-3 !py-1.5 !text-xs">Listening</a>
+                            {% endif %}
+                            {% if skills.reading and frontend_url %}
+                            <a href="{{ frontend_url }}/mock/{{ series }}/1/reading/1" target="_blank"
+                               class="panel-btn panel-btn-ghost !px-3 !py-1.5 !text-xs">Reading</a>
+                            {% endif %}
+                            {% if skills.listening %}
+                            <a href="{% url 'panel:mock_edit' skills.listening.id %}"
+                               class="panel-btn panel-btn-ghost !px-3 !py-1.5 !text-xs">Tahrirlaş</a>
+                            <form method="post" action="{% url 'panel:mock_delete' skills.listening.id %}"
+                                  onsubmit="return confirm('Listening mockini öçirasizmi?');">
+                                {% csrf_token %}
+                                <button type="submit" class="panel-btn panel-btn-ghost !px-3 !py-1.5 !text-xs !text-red-600 dark:!text-red-400">Öçiriş</button>
+                            </form>
+                            {% endif %}
+                            {% if skills.reading %}
+                            <a href="{% url 'panel:mock_edit' skills.reading.id %}"
+                               class="panel-btn panel-btn-ghost !px-3 !py-1.5 !text-xs">Tahrirlaş</a>
+                            <form method="post" action="{% url 'panel:mock_delete' skills.reading.id %}"
+                                  onsubmit="return confirm('Reading mockini öçirasizmi?');">
+                                {% csrf_token %}
+                                <button type="submit" class="panel-btn panel-btn-ghost !px-3 !py-1.5 !text-xs !text-red-600 dark:!text-red-400">Öçiriş</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="panel-card px-6 py-14 text-center">
+        <div class="text-4xl opacity-25">📄</div>
+        <h3 class="font-display mt-3 text-lg font-bold">Hali mock qöşilmagan</h3>
+        <p class="mt-1 text-sm text-black/45 dark:text-white/45">
+            HTML sahifani yuklang — AI uni standart JSON ga ögiradi.
+        </p>
+        <a href="{% url 'panel:mock_add' %}" class="panel-btn panel-btn-primary mt-5">Birinçi mockni qöşiş</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

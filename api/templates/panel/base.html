@@ -163,13 +163,19 @@
                    class="rounded-full px-3 py-1.5 font-semibold {% if request.resolver_match.url_name == 'dashboard' %}bg-black/[0.07] text-black/80 dark:bg-white/10 dark:text-white/90{% else %}text-black/50 hover:text-black/80 dark:text-white/50 dark:hover:text-white/90{% endif %}">Dashboard</a>
                 <a href="{% url 'panel:group_list' %}"
                    class="rounded-full px-3 py-1.5 font-semibold {% if 'group' in request.resolver_match.url_name %}bg-black/[0.07] text-black/80 dark:bg-white/10 dark:text-white/90{% else %}text-black/50 hover:text-black/80 dark:text-white/50 dark:hover:text-white/90{% endif %}">Guruhlar</a>
+                <a href="{% url 'panel:mock_list' %}"
+                   class="rounded-full px-3 py-1.5 font-semibold {% if 'mock' in request.resolver_match.url_name %}bg-black/[0.07] text-black/80 dark:bg-white/10 dark:text-white/90{% else %}text-black/50 hover:text-black/80 dark:text-white/50 dark:hover:text-white/90{% endif %}">Mocklar</a>
+                <a href="{% url 'panel:game_list' %}"
+                   class="rounded-full px-3 py-1.5 font-semibold {% if 'game' in request.resolver_match.url_name %}bg-black/[0.07] text-black/80 dark:bg-white/10 dark:text-white/90{% else %}text-black/50 hover:text-black/80 dark:text-white/50 dark:hover:text-white/90{% endif %}">Öyinlar</a>
+                <a href="{% url 'panel:tool_list' %}"
+                   class="rounded-full px-3 py-1.5 font-semibold {% if 'tool' in request.resolver_match.url_name %}bg-black/[0.07] text-black/80 dark:bg-white/10 dark:text-white/90{% else %}text-black/50 hover:text-black/80 dark:text-white/50 dark:hover:text-white/90{% endif %}">Tools</a>
                 <button type="button" onclick="toggleTheme()" title="Rejimni almashtirish"
                         class="flex h-8 w-8 items-center justify-center rounded-full text-black/50 transition hover:bg-black/[0.06] hover:text-black/80 dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white/90">
                     <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
                     </svg>
                 </button>
-                <a href="{% url 'panel:logout' %}" class="text-sm font-semibold text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300">Chiqish</a>
+                <a href="{% url 'panel:logout' %}" class="text-sm font-semibold text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300">Çiqiş</a>
             </nav>
         </div>
     </header>

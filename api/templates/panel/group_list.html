@@ -7,7 +7,7 @@
         <div>
             <span class="kicker"><span class="dot"><span class="ping"></span><span class="core"></span></span>Admin paneli</span>
             <h1 class="font-display mt-3 text-3xl font-bold">Guruhlar</h1>
-            <p class="mt-1 text-sm text-black/50 dark:text-white/45">O'quvchi guruhlarini boshqarish</p>
+            <p class="mt-1 text-sm text-black/50 dark:text-white/45">Öquvçi guruhlarini boşqariş</p>
         </div>
         <a href="{% url 'panel:group_add' %}" class="panel-btn panel-btn-primary">
             <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
@@ -20,8 +20,12 @@
         {% for g in groups %}
         <div class="panel-card overflow-hidden">
             <div class="flex items-center gap-4 p-5">
-                {% if g.logo %}
-                <img src="{{ g.logo.url }}" alt="{{ g.name }}" class="h-14 w-14 rounded-xl object-cover">
+                {% if g.logo_url %}
+                <img src="{{ g.logo_url }}" alt="{{ g.name }}" class="h-14 w-14 rounded-xl object-cover"
+                     onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+                <div class="hidden h-14 w-14 items-center justify-center rounded-xl bg-black/[0.06] text-xl font-bold text-black/40 dark:bg-white/[0.08] dark:text-white/40">
+                    {{ g.logo_initial }}
+                </div>
                 {% else %}
                 <div class="flex h-14 w-14 items-center justify-center rounded-xl bg-black/[0.06] text-xl font-bold text-black/40 dark:bg-white/[0.08] dark:text-white/40">
                     {{ g.name|slice:":1"|upper }}
@@ -43,7 +47,7 @@
             </div>
             <div class="border-t border-black/[0.06] px-5 py-3 dark:border-white/[0.06]">
                 <div class="flex items-center justify-between text-xs">
-                    <span class="text-black/40 dark:text-white/40">O'quvchilar</span>
+                    <span class="text-black/40 dark:text-white/40">Öquvçilar</span>
                     <span class="font-bold text-black/60 dark:text-white/60">{{ g.student_count }}</span>
                 </div>
                 <div class="mt-1 flex items-center justify-between text-xs">
@@ -51,27 +55,27 @@
                     <span class="font-bold text-black/60 dark:text-white/60">{{ g.parameters.ai_limit|default:"2" }}/kun</span>
                 </div>
                 <div class="mt-1 flex items-center justify-between text-xs">
-                    <span class="text-black/40 dark:text-white/40">Mock kirish</span>
+                    <span class="text-black/40 dark:text-white/40">Mock kiriş</span>
                     {% if g.parameters.mock_access %}
                     <span class="inline-flex items-center rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">Ha</span>
                     {% else %}
-                    <span class="inline-flex items-center rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] font-bold text-red-700 dark:text-red-400">Yo'q</span>
+                    <span class="inline-flex items-center rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] font-bold text-red-700 dark:text-red-400">Yöq</span>
                     {% endif %}
                 </div>
             </div>
             <div class="flex border-t border-black/[0.06] dark:border-white/[0.06]">
                 <a href="{% url 'panel:group_edit' g.id %}"
                    class="flex-1 px-4 py-2.5 text-center text-xs font-semibold text-black/60 transition hover:bg-black/[0.03] dark:text-white/60 dark:hover:bg-white/[0.05]">
-                    Tahrirlash
+                    Tahrirlaş
                 </a>
                 <div class="w-px bg-black/[0.06] dark:bg-white/[0.06]"></div>
                 <form method="post" action="{% url 'panel:group_delete' g.id %}"
-                      onsubmit="return confirm('Guruhni o\'chirishga ishonchingiz komilmi? Bu guruhdagi barcha o\'quvchilar guruchsiz qoladi.');"
+                      onsubmit="return confirm('Guruhni öçirişga işonçingiz komilmi? Bu guruhdagi barça öquvçilar guruhsiz qoladi.');"
                       class="flex-1">
                     {% csrf_token %}
                     <button type="submit"
                             class="w-full px-4 py-2.5 text-center text-xs font-semibold text-red-600 transition hover:bg-red-500/5 dark:text-red-400 dark:hover:bg-red-500/10">
-                        O'chirish
+                        Öçiriş
                     </button>
                 </form>
             </div>
@@ -80,8 +84,8 @@
     </div>
     {% else %}
     <div class="panel-card p-12 text-center text-sm text-black/35 dark:text-white/30">
-        <p>Hozircha guruhlar yo'q.</p>
-        <p class="mt-2">"Yangi guruh" tugmasini bosib birinchi guruhni yarating.</p>
+        <p>Hozirça guruhlar yöq.</p>
+        <p class="mt-2">"Yangi guruh" tugmasini bosib birinçi guruhni yarating.</p>
     </div>
     {% endif %}
 </div>

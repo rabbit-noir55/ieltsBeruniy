@@ -7,13 +7,13 @@
     <div class="mb-8">
         <span class="kicker"><span class="dot"><span class="ping"></span><span class="core"></span></span>Ustoz paneli</span>
         <h1 class="font-display mt-3 text-3xl font-bold">Dashboard</h1>
-        <p class="mt-1 text-sm text-black/50 dark:text-white/45">O'quvchilar va ularning natijalarini kuzating</p>
+        <p class="mt-1 text-sm text-black/50 dark:text-white/45">Öquvçilar va ularning natijalarini kuzating</p>
     </div>
 
     <!-- Umumiy statistika -->
     <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
         <div class="panel-card p-5">
-            <div class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">O'quvchilar</div>
+            <div class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">Öquvçilar</div>
             <div class="font-display mt-1 text-3xl font-bold">{{ summary.students }}</div>
         </div>
         <div class="panel-card p-5">
@@ -25,7 +25,7 @@
             <div class="font-display mt-1 text-3xl font-bold">{{ summary.results }}</div>
         </div>
         <div class="panel-card p-5">
-            <div class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">O'rtacha band</div>
+            <div class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">Örtaça band</div>
             <div class="font-display mt-1 text-3xl font-bold">{% if summary.avg_band %}{{ summary.avg_band|floatformat:1 }}{% else %}—{% endif %}</div>
         </div>
     </div>
@@ -36,9 +36,11 @@
         {% for g in all_groups %}
         <a href="{% url 'panel:group_list' %}"
            class="panel-card flex items-center gap-2 px-3 py-2 transition hover:scale-[1.02]">
-            {% if g.logo %}
-            <img src="{{ g.logo.url }}" class="h-6 w-6 rounded-md object-cover">
+            {% if g.logo_url %}
+            <img src="{{ g.logo_url }}" alt="" class="h-6 w-6 rounded-md object-cover"
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
             {% endif %}
+            <span class="h-6 w-6 items-center justify-center rounded-md bg-black/[0.06] text-[11px] font-bold text-black/50 dark:bg-white/[0.08] dark:text-white/50 {% if g.logo_url %}hidden{% else %}flex{% endif %}">{{ g.logo_initial }}</span>
             <span class="text-sm font-semibold">{{ g.name }}</span>
             <span class="rounded-full bg-black/[0.06] px-2 py-0.5 text-[11px] font-bold text-black/40 dark:bg-white/[0.08] dark:text-white/40">{{ g.student_count }}</span>
         </a>
@@ -52,7 +54,7 @@
         <div class="panel-card p-5">
             <div class="flex items-center justify-between">
                 <span class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">{{ label }}</span>
-                <span class="text-[11px] text-black/30 dark:text-white/30">o'rtacha</span>
+                <span class="text-[11px] text-black/30 dark:text-white/30">örtaça</span>
             </div>
             <div class="font-display mt-1 text-3xl font-bold">
                 {% if summary.skills|get_item:skill %}
@@ -68,13 +70,13 @@
         <div class="flex items-center justify-between border-b border-black/[0.06] px-6 py-4 dark:border-white/[0.06]">
             <div class="flex items-center gap-3">
                 <h2 class="font-display text-base font-bold">Yaqindagi natijalar</h2>
-                <span class="text-xs text-black/40 dark:text-white/40">so'nggi {{ recent|length }} ta</span>
+                <span class="text-xs text-black/40 dark:text-white/40">sönggi {{ recent|length }} ta</span>
             </div>
             {% if recent|length > 8 %}
             <button id="recent-toggle" type="button"
                     class="panel-btn panel-btn-ghost !px-3 !py-1.5 text-xs"
                     data-open="0">
-                <span id="recent-toggle-label">Ko'proq ko'rsatish</span>
+                <span id="recent-toggle-label">Köproq körsatiş</span>
             </button>
             {% endif %}
         </div>
@@ -108,7 +110,7 @@
             {% endfor %}
         </div>
         {% else %}
-        <div class="px-6 py-12 text-center text-sm text-black/35 dark:text-white/30">Hozircha natijalar yo'q</div>
+        <div class="px-6 py-12 text-center text-sm text-black/35 dark:text-white/30">Hozirça natijalar yöq</div>
         {% endif %}
     </div>
 
@@ -131,21 +133,21 @@
     <form method="get" class="mt-8 flex flex-col gap-2 sm:flex-row">
         <input type="text" name="q" value="{{ query }}" placeholder="O'quvchini qidirish (ism yoki login)..."
                class="panel-input sm:max-w-md">
-        <button type="submit" class="panel-btn panel-btn-primary">Qidirish</button>
-        {% if query %}<a href="{% url 'panel:dashboard' %}" class="panel-btn panel-btn-ghost">Tozalash</a>{% endif %}
+        <button type="submit" class="panel-btn panel-btn-primary">Qidiriş</button>
+        {% if query %}<a href="{% url 'panel:dashboard' %}" class="panel-btn panel-btn-ghost">Tozalaş</a>{% endif %}
     </form>
 
     <div class="panel-card mt-4 overflow-x-auto">
         <table class="w-full min-w-[820px] panel-table">
             <thead>
                 <tr>
-                    <th>O'quvchi</th>
+                    <th>Öquvçi</th>
                     <th>Guruhi</th>
                     <th class="text-center">Natijalar</th>
                     {% for skill, label in SKILL_LABELS.items %}
                     <th class="text-center">{{ label }}</th>
                     {% endfor %}
-                    <th class="text-center">O'rtacha</th>
+                    <th class="text-center">Örtaça</th>
                     <th>Oxirgi faollik</th>
                     <th class="text-right">Batafsil</th>
                 </tr>
@@ -201,17 +203,17 @@
                         </span>
                         {% endif %}
                         {% else %}
-                        <span class="text-xs text-black/30 dark:text-white/25">faollik yo'q</span>
+                        <span class="text-xs text-black/30 dark:text-white/25">faollik yöq</span>
                         {% endif %}
                     </td>
                     <td class="text-right">
                         <div class="flex items-center justify-end gap-2">
-                            <a href="{% url 'panel:student_detail' s.id %}" class="text-sm font-semibold text-black/60 underline-offset-4 hover:text-black hover:underline dark:text-white/60 dark:hover:text-white">Ko'rish</a>
+                            <a href="{% url 'panel:student_detail' s.id %}" class="text-sm font-semibold text-black/60 underline-offset-4 hover:text-black hover:underline dark:text-white/60 dark:hover:text-white">Köriş</a>
                             <form method="post" action="{% if s.is_blocked %}{% url 'panel:unblock_student' s.id %}{% else %}{% url 'panel:block_student' s.id %}{% endif %}">
                                 {% csrf_token %}
                                 <button type="submit"
                                         class="rounded-full px-2.5 py-1 text-[11px] font-bold transition {% if s.is_blocked %}bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/25 dark:text-emerald-400{% else %}bg-red-500/10 text-red-700 hover:bg-red-500/20 dark:text-red-400{% endif %}">
-                                    {% if s.is_blocked %}Ochish{% else %}Bloklash{% endif %}
+                                    {% if s.is_blocked %}Oçiş{% else %}Bloklaş{% endif %}
                                 </button>
                             </form>
                         </div>
@@ -219,7 +221,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="9" class="px-5 py-12 text-center text-black/35 dark:text-white/30">O'quvchilar topilmadi</td>
+                    <td colspan="9" class="px-5 py-12 text-center text-black/35 dark:text-white/30">Öquvçilar topilmadi</td>
                 </tr>
                 {% endfor %}
             </tbody>

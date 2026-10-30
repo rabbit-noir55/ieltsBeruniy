@@ -487,3 +487,294 @@ def speaking_feedback(request):
         return Response({'detail': 'Javobni tushib bo\'lmadi.', 'raw': result['text']}, status=status.HTTP_502_BAD_GATEWAY)
     return Response({'data': parsed})
 
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Our Mock: ustoz qo'shgan testlar (frontend o'qiydi)
+# ─────────────────────────────────────────────────────────────────────────────
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def our_mocks_list(request):
+    """Barcha chop etilgan mocklar: [{series, skills, titles}]."""
+    from .models import MockTest
+
+    items = {}
+    for mock in MockTest.objects.filter(is_published=True).order_by('series_id', 'skill'):
+        entry = items.setdefault(
+            mock.series_id,
+            {'series': mock.series_id, 'skills': [], 'titles': {}},
+        )
+        entry['skills'].append(mock.skill)
+        entry['titles'][mock.skill] = mock.title
+
+    ordered = sorted(items.values(), key=lambda item: item['series'])
+    return Response({'count': len(ordered), 'items': ordered})
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def our_mock_detail(request, series, skill):
+    """Bitta mock (skill bo'yicha) — to'liq payload."""
+    from .models import MockTest
+
+    skill = 'reading' if str(skill).lower().startswith('read') else 'listening'
+    mock = MockTest.objects.filter(
+        series_id=series, skill=skill, is_published=True
+    ).first()
+    if not mock:
+        return Response(
+            {'detail': "Test ma'lumotlari topilmadi."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    return Response(mock.payload)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def our_mock_preview(request, token):
+    """Saqlashdan oldingi preview (token bilan, 24 soat amal qiladi)."""
+    from datetime import timedelta
+
+    from django.utils import timezone as dj_timezone
+
+    from .models import MockPreview
+
+    preview = MockPreview.objects.filter(token=token).first()
+    if not preview:
+        return Response(
+            {'detail': 'Preview topilmadi yoki muddati tugagan.'},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    if preview.created_at < dj_timezone.now() - timedelta(hours=24):
+        preview.delete()
+        return Response(
+            {'detail': 'Preview muddati tugagan.'},
+            status=status.HTTP_410_GONE,
+        )
+    return Response(preview.payload)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  O'yinlar (ustoz qo'shadi) — server faqat saqlaydi
+# ─────────────────────────────────────────────────────────────────────────────
+def _display_name(user):
+    first = (user.first_name or '').strip()
+    last = (user.last_name or '').strip()
+    if first and last:
+        return f'{first} {last[:1]}.'
+    if first:
+        return first
+    if user.username:
+        return user.username
+    return "O'quvchi"
+
+
+def _game_payload(game):
+    return {
+        'id': game.id,
+        'title': game.title,
+        'description': game.description,
+        'config': game.config or {},
+        'icon': game.icon or '',
+        'colors': game.colors or [],
+    }
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def games_list(request):
+    from django.db.models import Count
+
+    from .models import Game, GameRating
+
+    games = Game.objects.filter(is_active=True).annotate(stars=Count('ratings'))
+
+    starred_ids = set()
+    if request.user.is_authenticated:
+        starred_ids = set(
+            GameRating.objects.filter(user=request.user).values_list('game_id', flat=True)
+        )
+
+    items = []
+    for game in games:
+        data = _game_payload(game)
+        data['plays'] = game.results.count()
+        data['stars'] = game.stars or 0
+        data['starred'] = game.id in starred_ids
+        items.append(data)
+    return Response({'count': len(items), 'items': items})
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def game_detail(request, game_id):
+    from .models import Game
+
+    game = Game.objects.filter(id=game_id, is_active=True).first()
+    if not game:
+        return Response({'detail': "O'yin topilmadi."}, status=status.HTTP_404_NOT_FOUND)
+
+    data = _game_payload(game)
+    data['html_code'] = game.html_code
+    return Response(data)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.IsAuthenticated])
+def game_result(request, game_id):
+    """O'yin natijalari.
+
+    GET  — o'yin uchun saqlangan barcha ma'lumotlar (o'yin o'z leaderboard'ini
+           shu ro'yxatdan o'zi tuzadi; server tartiblamaydi).
+    POST — yangi ma'lumotni saqlash. Server uni tahlil qilmaydi.
+    """
+    from .models import Game, GameResult
+
+    game = Game.objects.filter(id=game_id, is_active=True).first()
+    if not game:
+        return Response({'detail': "O'yin topilmadi."}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == 'GET':
+        try:
+            limit = min(max(int(request.GET.get('limit', 200)), 1), 500)
+        except (TypeError, ValueError):
+            limit = 200
+        rows = (
+            GameResult.objects.filter(game=game)
+            .select_related('user', 'user__group')
+            .order_by('-created_at')[:limit]
+        )
+        items = [
+            {
+                'name': _display_name(row.user),
+                'group': row.user.group.name if row.user.group_id else '',
+                'data': row.data,
+                'at': row.created_at,
+            }
+            for row in rows
+        ]
+        return Response({'count': len(items), 'items': items})
+
+    raw = request.data.get('data')
+    if raw is None:
+        raw = request.data.get('stats')
+    if raw is None:
+        raw = request.data.get('score', '')
+
+    if isinstance(raw, (dict, list)):
+        raw = json.dumps(raw, ensure_ascii=False)
+    elif not isinstance(raw, str):
+        raw = str(raw)
+
+    raw = raw[:200_000]
+
+    result = GameResult.objects.create(
+        game=game,
+        user=request.user,
+        data=raw,
+    )
+    return Response({'ok': True, 'id': result.id}, status=status.HTTP_201_CREATED)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Tools (ustoz qo'shadi) — sandbox HTML, bazada o'z xotirasi bilan
+# ─────────────────────────────────────────────────────────────────────────────
+def _tool_payload(tool):
+    return {
+        'id': tool.id,
+        'title': tool.title,
+        'description': tool.description,
+        'config': tool.config or {},
+        'icon': tool.icon or '',
+        'colors': tool.colors or [],
+    }
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def tools_list(request):
+    from .models import Tool
+
+    tools = Tool.objects.filter(is_active=True)
+    return Response({
+        'count': tools.count(),
+        'items': [_tool_payload(tool) for tool in tools],
+    })
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def tool_detail(request, tool_id):
+    from .models import Tool
+
+    tool = Tool.objects.filter(id=tool_id, is_active=True).first()
+    if not tool:
+        return Response({'detail': "Tool topilmadi."}, status=status.HTTP_404_NOT_FOUND)
+
+    data = _tool_payload(tool)
+    data['html_code'] = tool.html_code
+    return Response(data)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.IsAuthenticated])
+def tool_state(request, tool_id):
+    """Tool xotirasi: {key, value} — foydalanuvchi bo'yicha, bazada."""
+    from .models import Tool, ToolState
+
+    tool = Tool.objects.filter(id=tool_id, is_active=True).first()
+    if not tool:
+        return Response({'detail': "Tool topilmadi."}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == 'GET':
+        key = (request.GET.get('key') or '').strip()
+        if key:
+            row = ToolState.objects.filter(tool=tool, user=request.user, key=key).first()
+            return Response({'key': key, 'value': row.value if row else None})
+        rows = ToolState.objects.filter(tool=tool, user=request.user)
+        return Response({'items': {row.key: row.value for row in rows}})
+
+    key = str(request.data.get('key') or '').strip()[:120]
+    if not key:
+        return Response({'detail': "Kalit (key) kiritilishi shart."}, status=status.HTTP_400_BAD_REQUEST)
+
+    value = request.data.get('value')
+    raw = json.dumps(value, ensure_ascii=False) if not isinstance(value, str) else value
+    if len(raw.encode('utf-8')) > 100_000:
+        return Response({'detail': "Ma'lumot juda katta (100 KB)."}, status=status.HTTP_400_BAD_REQUEST)
+
+    ToolState.objects.update_or_create(
+        tool=tool,
+        user=request.user,
+        key=key,
+        defaults={'value': value if not isinstance(value, str) else {'text': value}},
+    )
+    return Response({'ok': True, 'key': key})
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.IsAuthenticated])
+def game_rating(request, game_id):
+    """Yulduzcha (like): har o'quvchi bitta o'yinga bitta yulduz qo'yadi."""
+    from django.db.models import Count
+
+    from .models import Game, GameRating
+
+    game = Game.objects.filter(id=game_id, is_active=True).first()
+    if not game:
+        return Response({'detail': "O'yin topilmadi."}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == 'POST':
+        starred = request.data.get('starred')
+        if starred is None:
+            starred = not GameRating.objects.filter(game=game, user=request.user).exists()
+        if bool(starred):
+            GameRating.objects.update_or_create(
+                game=game, user=request.user, defaults={'rating': 1}
+            )
+        else:
+            GameRating.objects.filter(game=game, user=request.user).delete()
+
+    stats = game.ratings.aggregate(count=Count('id'))
+    mine = GameRating.objects.filter(game=game, user=request.user).exists()
+    return Response({'stars': stats['count'] or 0, 'starred': mine})

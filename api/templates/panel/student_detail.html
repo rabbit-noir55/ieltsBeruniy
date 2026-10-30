@@ -12,7 +12,7 @@
     </div>
     <div class="flex flex-wrap items-end justify-between gap-3 mb-6">
         <div>
-            <span class="kicker"><span class="dot"><span class="ping"></span><span class="core"></span></span>O'quvchi profili</span>
+            <span class="kicker"><span class="dot"><span class="ping"></span><span class="core"></span></span>Öquvçi profili</span>
             <h1 class="font-display mt-2 text-3xl font-bold">{{ student.full_name }}
                 {% if student.is_blocked %}
                 <span class="ml-2 inline-flex items-center gap-1 align-middle rounded-full bg-red-500/15 px-2.5 py-1 text-xs font-bold text-red-700 dark:text-red-400">
@@ -22,7 +22,7 @@
                 {% endif %}
             </h1>
             <p class="mt-1 text-sm text-black/50 dark:text-white/45">
-                {{ student.email }} · Ro'yxatdan o'tgan: {{ student.date_joined|date:"d.m.Y" }}
+                {{ student.email }} · Röyxatdan ötgan: {{ student.date_joined|date:"d.m.Y" }}
             </p>
             {% if last_activity %}
             <p class="mt-1 text-xs font-semibold text-black/40 dark:text-white/40">
@@ -34,13 +34,13 @@
             {% if student.is_blocked %}
             <form method="post" action="{% url 'panel:unblock_student' student.id %}">
                 {% csrf_token %}
-                <button type="submit" class="panel-btn panel-btn-ghost !text-emerald-700 dark:!text-emerald-400">Blokdan chiqarish</button>
+                <button type="submit" class="panel-btn panel-btn-ghost !text-emerald-700 dark:!text-emerald-400">Blokdan çiqariş</button>
             </form>
             {% else %}
             <form method="post" action="{% url 'panel:block_student' student.id %}"
-                  onsubmit="return confirm('Ushbu o\'quvchini bloklashga ishonchingiz komilmi? Bloklanganda o\'quvchi saytga kira olmaydi.');">
+                  onsubmit="return confirm('Uşbu öquvçini bloklaşga işonçingiz komilmi? Bloklanganda öquvçi saytga kira olmaydi.');">
                 {% csrf_token %}
-                <button type="submit" class="panel-btn !bg-red-600 !text-white hover:!bg-red-700">Bloklash</button>
+                <button type="submit" class="panel-btn !bg-red-600 !text-white hover:!bg-red-700">Bloklaş</button>
             </form>
             {% endif %}
         </div>
@@ -49,17 +49,17 @@
     <!-- Umumiy xulosa -->
     <div class="grid grid-cols-2 gap-4 md:grid-cols-3">
         <div class="panel-card p-5">
-            <div class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">Jami urinishlar</div>
+            <div class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">Jami urinişlar</div>
             <div class="font-display mt-1 text-3xl font-bold">{{ total_attempts }}</div>
         </div>
         <div class="panel-card p-5">
-            <div class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">O'rtacha band</div>
+            <div class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">Örtaça band</div>
             <div class="font-display mt-1 text-3xl font-bold">
                 {% if overall_avg %}<span class="band-badge" data-band="{{ overall_avg }}">{{ overall_avg|floatformat:1 }}</span>{% else %}—{% endif %}
             </div>
         </div>
         <div class="panel-card p-5">
-            <div class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">Eng yaxshi band</div>
+            <div class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">Eng yaxşi band</div>
             <div class="font-display mt-1 text-3xl font-bold">
                 {% if overall_best %}<span class="band-badge" data-band="{{ overall_best }}">{{ overall_best|floatformat:1 }}</span>{% else %}—{% endif %}
             </div>
@@ -79,7 +79,7 @@
                     {% if student.password_plain %}
                     <div class="font-mono mt-1 text-lg font-bold text-black/80 dark:text-white/80">{{ student.password_plain }}</div>
                     {% else %}
-                    <div class="mt-1 text-sm text-black/40 dark:text-white/40">Noma'lum — yangi parol o'rnating</div>
+                    <div class="mt-1 text-sm text-black/40 dark:text-white/40">Noma'lum — yangi parol örnating</div>
                     {% endif %}
                 </div>
                 <div>
@@ -97,12 +97,12 @@
                 </div>
             </div>
             <details class="panel-card border p-3">
-                <summary class="cursor-pointer text-sm font-semibold text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white">Yangi parol o'rnatish</summary>
+                <summary class="cursor-pointer text-sm font-semibold text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white">Yangi parol örnatiş</summary>
                 <form method="post" action="{% url 'panel:set_student_password' student.id %}" class="mt-3 flex items-center gap-2">
                     {% csrf_token %}
                     <input type="password" name="password" required minlength="6" placeholder="Yangi parol (kamida 6 belgi)"
                            class="panel-input min-w-0 flex-1">
-                    <button type="submit" class="panel-btn panel-btn-primary !px-3 !py-1.5 text-xs">Saqlash</button>
+                    <button type="submit" class="panel-btn panel-btn-primary !px-3 !py-1.5 text-xs">Saqlaş</button>
                 </form>
             </details>
         </div>
@@ -120,12 +120,12 @@
                     {% if item.avg_band %}{{ item.avg_band|floatformat:1 }}{% else %}—{% endif %}
                 </span>
                 {% if item.best_band %}
-                <span class="text-xs text-black/40 dark:text-white/40">eng yaxshi <b class="text-black/70 dark:text-white/70">{{ item.best_band|floatformat:1 }}</b></span>
+                <span class="text-xs text-black/40 dark:text-white/40">eng yaxşi <b class="text-black/70 dark:text-white/70">{{ item.best_band|floatformat:1 }}</b></span>
                 {% endif %}
             </div>
         </div>
         {% empty %}
-        <div class="panel-card p-5 col-span-full text-center text-sm text-black/35 dark:text-white/30">Hozircha natijalar yo'q</div>
+        <div class="panel-card p-5 col-span-full text-center text-sm text-black/35 dark:text-white/30">Hozirça natijalar yöq</div>
         {% endfor %}
     </div>
 
@@ -155,8 +155,8 @@
                 <input type="number" name="test" value="{{ filters.test }}" placeholder="Masalan: 1" class="panel-input">
             </div>
             <div class="flex gap-2">
-                <button type="submit" class="panel-btn panel-btn-primary">Filtrlash</button>
-                <a href="{% url 'panel:student_detail' student.id %}" class="panel-btn panel-btn-ghost">Tozalash</a>
+                <button type="submit" class="panel-btn panel-btn-primary">Filtrlaş</button>
+                <a href="{% url 'panel:student_detail' student.id %}" class="panel-btn panel-btn-ghost">Tozalaş</a>
             </div>
         </div>
     </form>
@@ -209,10 +209,10 @@
     <div class="mt-6 panel-card p-5 border border-red-500/20">
         <h3 class="text-sm font-bold text-red-500 mb-3">Xavfli zona</h3>
         <form method="post" action="{% url 'panel:delete_student' student.id %}"
-              onsubmit="return confirm('Haqiqatan ham bu o\'quvchini o\'chirmoqchimisiz? Bu amal ortga qaytarib bo\'lmaydi!')">
+              onsubmit="return confirm('Haqiqatan ham bu öquvçini öçirmoqçimisiz? Bu amal ortga qaytarib bölmaydi!')">
             {% csrf_token %}
             <button type="submit" class="rounded-lg bg-red-500 px-4 py-2 text-sm font-bold text-white hover:bg-red-600 transition-colors">
-                O'quvchini o'chirish
+                Öquvçini öçiriş
             </button>
         </form>
     </div>
