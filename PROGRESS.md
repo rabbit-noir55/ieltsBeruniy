@@ -5,18 +5,20 @@
 
 ## Hozirgi holat
 
-- Bosqich: (boshlanmagan)
-- Oxirgi commit: —
-- Oxirgi run: —
+- Bosqich: 0. Google parol bug
+- Oxirgi commit: d6e9bb5 — SQLite migration tuzatildi
+- Oxirgi run: 2026-11-01 16:04 UTC
 
 ## Bajarilgan
 
-<!-- - [x] vazifa — nima o'zgardi, qaysi fayl -->
+- [x] SQLite testlarini bloklagan migration tuzatildi (`api/migrations/0015_remove_news.py`: `DROP TABLE ... CASCADE` olib tashlandi)
+- [x] `python manage.py check` va `python manage.py test api --noinput` yashil
 
 ## Keyingi qadam
 
-(birinchi navbatdagi ish)
+- `api/views.py` → `google_login`: `user.set_unusable_password()` ni `user.set_password(random_password)` ga almashtirish
+- Google orqali ro'yxatdan o'tgan userlar uchun `password_plain` bilan `authenticate()` testi qo'shish
 
 ## Ma'lum muammolar
 
-<!-- Agent tuzata olmagan narsalar, keyingi run uchun eslatma -->
+- SQLite'da `DROP TABLE ... CASCADE` qo'llab-quvvatlanmaydi; tuzatildi.
