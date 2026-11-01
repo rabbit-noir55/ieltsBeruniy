@@ -278,3 +278,11 @@ TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
 TELEGRAM_BOT_USERNAME = os.environ.get('TELEGRAM_BOT_USERNAME', 'ielts_beruniy_bot')
 TELEGRAM_WEBHOOK_SECRET = os.environ.get('TELEGRAM_WEBHOOK_SECRET', '')
 TELEGRAM_WEBAPP_URL = os.environ.get('TELEGRAM_WEBAPP_URL', '')
+
+# Davomat (attendance) sozlamalari
+CENTER_LAT = float(os.environ.get('CENTER_LAT', '41.3111'))
+CENTER_LNG = float(os.environ.get('CENTER_LNG', '69.2405'))
+CENTER_RADIUS_M = int(os.environ.get('CENTER_RADIUS_M', '150'))
+MAX_GPS_ACCURACY_M = int(os.environ.get('MAX_GPS_ACCURACY_M', '300'))
+ATTENDANCE_CODE = os.environ.get('ATTENDANCE_CODE', 'ENTHUS8X')
+ATTENDANCE_WINDOW_MIN = int(os.environ.get('ATTENDANCE_WINDOW_MIN', '15'))

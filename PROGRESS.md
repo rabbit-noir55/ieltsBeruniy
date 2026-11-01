@@ -6,8 +6,8 @@
 ## Hozirgi holat
 
 - Bosqich: 2. Davomat — modellar va yordamchilar
-- Oxirgi commit: 28d0f11 — Attendance modellari
-- Oxirgi run: 2026-11-01 16:13 UTC
+- Oxirgi commit: aaf65a2 — Davomat sozlamalari
+- Oxirgi run: 2026-11-01 16:14 UTC
 
 ## Bajarilgan
 
@@ -23,10 +23,11 @@
 - [x] `api/tests.py` ga Telegram testlar qo'shildi: noto'g'ri secret 403, yaroqli payload bog'laydi, eskirgan payload rad etadi
 - [x] `api/views.py` ga `reveal_password` view qo'shildi + URL + testlar
 - [x] `Attendance`, `DayOff`, `ScanEvent` modellari qo'shildi + migratsiya `0028`
+- [x] `config/settings.py` ga davomat sozlamalari qo'shildi
 
 ## Keyingi qadam
 
-- `config/settings.py` ga davomat sozlamalarini qo'shish: `CENTER_LAT`, `CENTER_LNG`, `CENTER_RADIUS_M`, `MAX_GPS_ACCURACY_M`, `ATTENDANCE_CODE`, `ATTENDANCE_WINDOW_MIN`
+- `api/attendance.py` yaratish: Haversine `distance_m`, `is_lesson_day(group, date)`, `now_tashkent()`
 
 ## Ma'lum muammolar
 
