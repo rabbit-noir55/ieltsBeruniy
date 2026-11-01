@@ -6,8 +6,8 @@
 ## Hozirgi holat
 
 - Bosqich: 2. Davomat — modellar va yordamchilar
-- Oxirgi commit: 8b99b17 — reveal_password endpoint va testlari
-- Oxirgi run: 2026-11-01 16:12 UTC
+- Oxirgi commit: 28d0f11 — Attendance modellari
+- Oxirgi run: 2026-11-01 16:13 UTC
 
 ## Bajarilgan
 
@@ -22,10 +22,11 @@
 - [x] `config/settings.py` ga Telegram sozlamalari qo'shildi
 - [x] `api/tests.py` ga Telegram testlar qo'shildi: noto'g'ri secret 403, yaroqli payload bog'laydi, eskirgan payload rad etadi
 - [x] `api/views.py` ga `reveal_password` view qo'shildi + URL + testlar
+- [x] `Attendance`, `DayOff`, `ScanEvent` modellari qo'shildi + migratsiya `0028`
 
 ## Keyingi qadam
 
-- `Attendance`, `DayOff`, `ScanEvent` modellari qo'shish (`API_CONTRACT.md` sxemasi bo'yicha) + migratsiya
+- `config/settings.py` ga davomat sozlamalarini qo'shish: `CENTER_LAT`, `CENTER_LNG`, `CENTER_RADIUS_M`, `MAX_GPS_ACCURACY_M`, `ATTENDANCE_CODE`, `ATTENDANCE_WINDOW_MIN`
 
 ## Ma'lum muammolar
 

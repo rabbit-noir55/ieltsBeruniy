@@ -352,3 +352,84 @@ class GameRating(models.Model):
 
     def __str__(self):
         return f'{self.game_id} — {self.user_id}: {self.rating}'
+
+
+class Attendance(models.Model):
+    """O'quvchining davomati."""
+
+    SOURCE_QR = 'qr'
+    SOURCE_MANUAL = 'manual'
+    SOURCE_CHOICES = [
+        (SOURCE_QR, 'QR'),
+        (SOURCE_MANUAL, 'Qo\'lda'),
+    ]
+
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='attendances')
+    group = models.ForeignKey(UserGroup, on_delete=models.CASCADE, related_name='attendances')
+    date = models.DateField()
+    source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default=SOURCE_QR)
+    distance_m = models.PositiveIntegerField(null=True, blank=True)
+    marked_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='manual_attendances',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date', '-created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['student', 'date'], name='unique_attendance_per_day'),
+        ]
+
+    def __str__(self):
+        return f'{self.student} — {self.date}'
+
+
+class DayOff(models.Model):
+    """Dars bo'lmagan istisno kunlar."""
+
+    date = models.DateField()
+    group = models.ForeignKey(
+        UserGroup, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='days_off',
+    )
+    reason = models.CharField(max_length=255, blank=True, default='')
+
+    class Meta:
+        ordering = ['-date']
+        verbose_name_plural = 'Days off'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['date', 'group'],
+                name='unique_day_off_per_group',
+            ),
+        ]
+
+    def __str__(self):
+        if self.group:
+            return f'{self.date} — {self.group}'
+        return f'{self.date} — butun markaz'
+
+
+class ScanEvent(models.Model):
+    """QR skan urinishlari jurnali."""
+
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='scan_events')
+    group = models.ForeignKey(
+        UserGroup, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='scan_events',
+    )
+    date = models.DateField()
+    code = models.CharField(max_length=50)
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    accuracy = models.FloatField(null=True, blank=True)
+    distance_m = models.FloatField(null=True, blank=True)
+    error_code = models.CharField(max_length=50, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.student} — {self.date} — {self.code}'
