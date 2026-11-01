@@ -10,10 +10,10 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunSQL(
             sql=[
-                "DROP TABLE IF EXISTS api_newsread CASCADE",
-                "DROP TABLE IF EXISTS api_newscomment CASCADE",
-                "DROP TABLE IF EXISTS api_newsreaction CASCADE",
-                "DROP TABLE IF EXISTS api_news CASCADE",
+                "DROP TABLE IF EXISTS api_newsread",
+                "DROP TABLE IF EXISTS api_newscomment",
+                "DROP TABLE IF EXISTS api_newsreaction",
+                "DROP TABLE IF EXISTS api_news",
             ],
             reverse_sql=[],
         ),
