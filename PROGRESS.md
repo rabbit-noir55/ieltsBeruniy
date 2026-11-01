@@ -5,9 +5,9 @@
 
 ## Hozirgi holat
 
-- Bosqich: 2. Davomat — modellar va yordamchilar
-- Oxirgi commit: aaf65a2 — Davomat sozlamalari
-- Oxirgi run: 2026-11-01 16:14 UTC
+- Bosqich: 3. Davomat — API
+- Oxirgi commit: d2203a7 — Davomat yordamchilari va testlari
+- Oxirgi run: 2026-11-01 16:15 UTC
 
 ## Bajarilgan
 
@@ -24,10 +24,12 @@
 - [x] `api/views.py` ga `reveal_password` view qo'shildi + URL + testlar
 - [x] `Attendance`, `DayOff`, `ScanEvent` modellari qo'shildi + migratsiya `0028`
 - [x] `config/settings.py` ga davomat sozlamalari qo'shildi
+- [x] `api/attendance.py` yaratildi: Haversine `distance_m`, `is_lesson_day`, `now_tashkent`
+- [x] `api/tests.py` ga davomat yordamchi testlari qo'shildi
 
 ## Keyingi qadam
 
-- `api/attendance.py` yaratish: Haversine `distance_m`, `is_lesson_day(group, date)`, `now_tashkent()`
+- `POST /api/attendance/scan/` endpoint qo'shish: 10 qadamli tekshiruv, har urinish `ScanEvent` ga yoziladi
 
 ## Ma'lum muammolar
 

@@ -1,3 +1,4 @@
+from datetime import date
 from unittest.mock import patch
 
 from django.contrib.auth import authenticate
@@ -8,7 +9,8 @@ from django.urls import reverse
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient, APITestCase
 
-from .models import TestResult, User
+from .attendance import distance_m, is_lesson_day
+from .models import DayOff, TestResult, User, UserGroup
 
 
 def authed_client(token):
@@ -334,3 +336,57 @@ class TelegramWebhookTests(APITestCase):
         })
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.json()['ok'])
+
+
+class AttendanceHelperTests(APITestCase):
+    """Davomat yordamchi funksiyalari testlari."""
+
+    def test_distance_same_point_is_zero(self):
+        self.assertAlmostEqual(distance_m(41.3111, 69.2405, 41.3111, 69.2405), 0, places=1)
+
+    def test_distance_one_degree_latitude(self):
+        # 1 gradus kenglik taxminan 111 km
+        meters = distance_m(41.0, 69.0, 42.0, 69.0)
+        self.assertAlmostEqual(meters, 111_000, delta=2_000)
+
+    def test_is_lesson_day_odd_schedule(self):
+        group = UserGroup.objects.create(
+            name='IELTS-Odd', slug='ielts-odd', schedule_type='odd'
+        )
+        # Dushanba (2026-11-02) toq kun
+        self.assertTrue(is_lesson_day(group, date(2026, 11, 2)))
+        # Seshanba (2026-11-03) juft kun
+        self.assertFalse(is_lesson_day(group, date(2026, 11, 3)))
+
+    def test_is_lesson_day_even_schedule(self):
+        group = UserGroup.objects.create(
+            name='IELTS-Even', slug='ielts-even', schedule_type='even'
+        )
+        # Seshanba (2026-11-03) juft kun
+        self.assertTrue(is_lesson_day(group, date(2026, 11, 3)))
+        # Dushanba (2026-11-02) toq kun
+        self.assertFalse(is_lesson_day(group, date(2026, 11, 2)))
+
+    def test_is_lesson_day_sunday_is_false(self):
+        group = UserGroup.objects.create(
+            name='IELTS-Sun', slug='ielts-sun', schedule_type='odd'
+        )
+        # Yakshanba (2026-11-01)
+        self.assertFalse(is_lesson_day(group, date(2026, 11, 1)))
+
+    def test_is_lesson_day_day_off(self):
+        group = UserGroup.objects.create(
+            name='IELTS-DayOff', slug='ielts-dayoff', schedule_type='odd'
+        )
+        lesson_date = date(2026, 11, 2)
+        self.assertTrue(is_lesson_day(group, lesson_date))
+        DayOff.objects.create(date=lesson_date, group=group, reason='Bayram')
+        self.assertFalse(is_lesson_day(group, lesson_date))
+
+    def test_is_lesson_day_whole_center_day_off(self):
+        group = UserGroup.objects.create(
+            name='IELTS-CenterOff', slug='ielts-centeroff', schedule_type='odd'
+        )
+        lesson_date = date(2026, 11, 2)
+        DayOff.objects.create(date=lesson_date, group=None, reason='Markaz yopiq')
+        self.assertFalse(is_lesson_day(group, lesson_date))
