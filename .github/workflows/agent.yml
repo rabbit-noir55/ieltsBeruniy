@@ -1,0 +1,123 @@
+name: OpenCode Agent
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "Qo'shimcha ko'rsatma (bo'sh bo'lsa TASKS.md navbatidan oladi)"
+        required: false
+        default: ""
+      minutes:
+        description: "Agent vaqt byudjeti (daqiqa, 1-330). 330 = ~5.5 soat"
+        required: false
+        default: "90"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: opencode-agent
+  cancel-in-progress: false
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+      DJANGO_DEBUG: "1"
+      DJANGO_SECRET_KEY: "ci-only-not-a-real-secret"
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1"
+      CORS_ALLOWED_ORIGINS: "http://localhost:5173"
+      GIT_PUSH_BRANCH: "main"
+      PYTHONUNBUFFERED: "1"
+      CI: "true"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Git identifikatsiya
+        run: |
+          git config user.name "opencode-agent"
+          git config user.email "opencode-agent@users.noreply.github.com"
+
+      - name: Snapshot tag (qaytish nuqtasi)
+        run: |
+          TAG="pre-ai-$(date -u +%Y%m%d-%H%M%S)"
+          git tag "$TAG"
+          git push origin "$TAG"
+          echo "### Snapshot: \`$TAG\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Qaytish: git reset --hard $TAG && git push --force-with-lease origin main" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Bog'liqliklar
+        run: pip install -r requirements.txt
+
+      - name: Node 22 (OpenCode uchun)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: OpenCode CLI
+        run: npm install --global @opencode/cli
+
+      - name: Agent
+        id: agent
+        continue-on-error: true
+        timeout-minutes: 335
+        env:
+          TASK: ${{ inputs.task }}
+          MINUTES: ${{ inputs.minutes }}
+        run: |
+          set -o pipefail
+
+          PROMPT="$(cat .github/agent-prompt.md)"
+          PROMPT="${PROMPT//\{\{TASK\}\}/$TASK}"
+          PROMPT="${PROMPT//\{\{MINUTES\}\}/$MINUTES}"
+
+          opencode run --standalone --auto --format json \
+            --model opencode-go/kimi-k2.7-code \
+            "$PROMPT" 2>&1 | tee agent-log.jsonl
+
+      - name: Xulosa
+        if: always()
+        run: |
+          {
+            echo "### Agent natijasi"
+            echo ""
+            echo "- Status: \`${{ steps.agent.outcome }}\`"
+            echo "- Branch: \`$(git rev-parse --abbrev-ref HEAD)\`"
+            echo "- Oxirgi commit: \`$(git log -1 --pretty=%s)\`"
+            echo ""
+            echo "#### PROGRESS.md"
+            echo ""
+            head -40 PROGRESS.md || true
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Qoldiqni saqlash
+        if: always()
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Saqlanadigan o'zgarish yo'q"
+          else
+            git commit -m "ai: qoldiq (run ${{ github.run_id }})"
+            git push origin "HEAD:${GIT_PUSH_BRANCH}"
+          fi
+
+      - name: Log yuklash
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-log-${{ github.run_id }}
+          path: agent-log.jsonl
+          retention-days: 14
+          if-no-files-found: ignore
