@@ -17,9 +17,12 @@ from rest_framework.response import Response
 
 import requests as http_requests
 
+from django.conf import settings
+
+from .attendance import distance_m, is_lesson_day, now_tashkent
 from .permissions import BLOCKED_MESSAGE
 from .throttles import AuthThrottle
-from .models import TestResult, TypingResult, User, UserGroup
+from .models import Attendance, ScanEvent, TestResult, TypingResult, User, UserGroup
 from .serializers import (
     RegisterSerializer,
     TestResultSerializer,
@@ -831,3 +834,188 @@ def game_rating(request, game_id):
     stats = game.ratings.aggregate(count=Count('id'))
     mine = GameRating.objects.filter(game=game, user=request.user).exists()
     return Response({'stars': stats['count'] or 0, 'starred': mine})
+
+
+# ── Davomat (attendance) ────────────────────────────────────────────────────
+
+def _today_tashkent():
+    return now_tashkent().date()
+
+
+def _log_scan_event(user, group, date, code, lat, lon, accuracy, distance_m_value, error_code):
+    ScanEvent.objects.create(
+        student=user,
+        group=group,
+        date=date,
+        code=code,
+        latitude=lat,
+        longitude=lon,
+        accuracy=accuracy,
+        distance_m=distance_m_value,
+        error_code=error_code,
+    )
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def attendance_scan(request):
+    """QR kod skan qilish orqali davomat belgilash."""
+    user = request.user
+    code = (request.data.get('code') or '').strip()
+    latitude = request.data.get('latitude')
+    longitude = request.data.get('longitude')
+    accuracy = request.data.get('accuracy')
+
+    today = _today_tashkent()
+    group = user.group
+    distance_value = None
+
+    def error_response(message, code_key, extra=None):
+        _log_scan_event(user, group, today, code, latitude, longitude, accuracy, distance_value, code_key)
+        body = {'error': message, 'code': code_key}
+        if extra:
+            body.update(extra)
+        status_map = {
+            'external_user': status.HTTP_403_FORBIDDEN,
+            'blocked': status.HTTP_403_FORBIDDEN,
+            'already_marked': status.HTTP_409_CONFLICT,
+        }
+        status_code = status_map.get(code_key, status.HTTP_400_BAD_REQUEST)
+        return Response(body, status=status_code)
+
+    # 1. Kod tekshiruvi
+    if code != settings.ATTENDANCE_CODE:
+        return error_response('QR kod notogri.', 'invalid_code')
+
+    # 2. Guruhga biriktirilganmi
+    if not group:
+        return error_response('Siz guruhga biriktirilmagansiz.', 'external_user')
+
+    # 3. Bloklanganmi
+    if user.is_blocked:
+        return error_response(BLOCKED_MESSAGE, 'blocked')
+
+    # 4. Lokatsiya kiritilganmi
+    if latitude is None or longitude is None:
+        return error_response('GPS aniqlanmadi.', 'no_location')
+
+    try:
+        latitude = float(latitude)
+        longitude = float(longitude)
+        accuracy = float(accuracy) if accuracy is not None else None
+    except (ValueError, TypeError):
+        return error_response('GPS aniqlanmadi.', 'no_location')
+
+    # 5. Aniqlik yetarlimi
+    max_accuracy = settings.MAX_GPS_ACCURACY_M
+    if accuracy is None or accuracy > max_accuracy:
+        return error_response('GPS aniqligi past.', 'low_accuracy')
+
+    # 6. Markaz hududidami
+    center_lat = settings.CENTER_LAT
+    center_lng = settings.CENTER_LNG
+    radius = settings.CENTER_RADIUS_M
+    distance_value = distance_m(latitude, longitude, center_lat, center_lng)
+    if distance_value > radius:
+        return error_response('Siz markaz hududida emassiz.', 'too_far', {'distance_m': round(distance_value)})
+
+    # 7. Bugun dars bormi
+    if not is_lesson_day(group, today):
+        return error_response('Bugun bu guruhda dars yoq.', 'no_lesson')
+
+    # 8. Dars vaqti oynasidami
+    if group.schedule_time:
+        now = now_tashkent()
+        lesson_start = now.replace(
+            hour=group.schedule_time.hour,
+            minute=group.schedule_time.minute,
+            second=0,
+            microsecond=0,
+        )
+        window = settings.ATTENDANCE_WINDOW_MIN
+        delta_minutes = abs((now - lesson_start).total_seconds()) / 60
+        if delta_minutes > window:
+            return error_response('Dars vaqti oynasidan tashqarida.', 'out_of_window')
+
+    # 9. Allaqachon belgilanganmi
+    if Attendance.objects.filter(student=user, date=today).exists():
+        return error_response('Bugun allaqachon belgilangan.', 'already_marked')
+
+    # 10. Davomat yaratish
+    attendance = Attendance.objects.create(
+        student=user,
+        group=group,
+        date=today,
+        source=Attendance.SOURCE_QR,
+        distance_m=round(distance_value),
+    )
+    _log_scan_event(user, group, today, code, latitude, longitude, accuracy, distance_value, '')
+
+    return Response({
+        'ok': True,
+        'date': str(attendance.date),
+        'distance_m': attendance.distance_m,
+        'group': group.name,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def attendance_my(request):
+    """O'quvchining o'z davomat yozuvlari."""
+    qs = Attendance.objects.filter(student=request.user).order_by('-date')
+    results = [
+        {'date': str(a.date), 'source': a.source, 'distance_m': a.distance_m}
+        for a in qs
+    ]
+    return Response({'results': results})
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def attendance_manual(request):
+    """Admin o'quvchi uchun qo'lda davomat belgilash."""
+    user = request.user
+    if user.role != User.ROLE_TEACHER:
+        return Response(
+            {'detail': "Faqat o'qituvchi uchun."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    student_id = request.data.get('student')
+    date_str = request.data.get('date')
+
+    try:
+        student = User.objects.get(pk=student_id, role=User.ROLE_STUDENT)
+    except (User.DoesNotExist, TypeError, ValueError):
+        return Response(
+            {'detail': "O'quvchi topilmadi."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    try:
+        from datetime import datetime as _dt
+        manual_date = _dt.strptime(date_str, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return Response(
+            {'detail': 'Sana formati notogri (YYYY-MM-DD).'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if not student.group:
+        return Response(
+            {'detail': "O'quvchi guruhga biriktirilmagan."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    attendance, _ = Attendance.objects.get_or_create(
+        student=student,
+        date=manual_date,
+        defaults={
+            'group': student.group,
+            'source': Attendance.SOURCE_MANUAL,
+            'marked_by': user,
+        },
+    )
+
+    return Response({'ok': True, 'date': str(attendance.date)})

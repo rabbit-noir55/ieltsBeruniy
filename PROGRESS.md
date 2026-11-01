@@ -5,9 +5,9 @@
 
 ## Hozirgi holat
 
-- Bosqich: 3. Davomat — API
-- Oxirgi commit: d2203a7 — Davomat yordamchilari va testlari
-- Oxirgi run: 2026-11-01 16:15 UTC
+- Bosqich: 4. Davomat — admin panel
+- Oxirgi commit: fff3fd9 — Attendance API va testlari
+- Oxirgi run: 2026-11-01 16:17 UTC
 
 ## Bajarilgan
 
@@ -26,10 +26,11 @@
 - [x] `config/settings.py` ga davomat sozlamalari qo'shildi
 - [x] `api/attendance.py` yaratildi: Haversine `distance_m`, `is_lesson_day`, `now_tashkent`
 - [x] `api/tests.py` ga davomat yordamchi testlari qo'shildi
+- [x] `POST /attendance/scan/`, `GET /attendance/my/`, `POST /attendance/manual/` endpointlari qo'shildi + testlar
 
 ## Keyingi qadam
 
-- `POST /api/attendance/scan/` endpoint qo'shish: 10 qadamli tekshiruv, har urinish `ScanEvent` ga yoziladi
+- Admin panel "Bugungi davomat": guruh tanlash → o'quvchilar ro'yxati, ptichka yoki "+" tugmasi
 
 ## Ma'lum muammolar
 

@@ -1,5 +1,6 @@
-from datetime import date
+from datetime import date, datetime
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth import authenticate
 from django.core import signing
@@ -10,7 +11,7 @@ from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient, APITestCase
 
 from .attendance import distance_m, is_lesson_day
-from .models import DayOff, TestResult, User, UserGroup
+from .models import Attendance, DayOff, ScanEvent, TestResult, User, UserGroup
 
 
 def authed_client(token):
@@ -390,3 +391,150 @@ class AttendanceHelperTests(APITestCase):
         lesson_date = date(2026, 11, 2)
         DayOff.objects.create(date=lesson_date, group=None, reason='Markaz yopiq')
         self.assertFalse(is_lesson_day(group, lesson_date))
+
+
+@override_settings(
+    ATTENDANCE_CODE='ENTHUS8X',
+    CENTER_LAT=41.3111,
+    CENTER_LNG=69.2405,
+    CENTER_RADIUS_M=150,
+    MAX_GPS_ACCURACY_M=300,
+    ATTENDANCE_WINDOW_MIN=15,
+)
+class AttendanceScanTests(APITestCase):
+    """Davomat skan endpoint testlari."""
+
+    def setUp(self):
+        self.group = UserGroup.objects.create(
+            name='IELTS-Scan',
+            slug='ielts-scan',
+            schedule_type='odd',
+            schedule_time='09:00:00',
+        )
+        self.student = create_test_user(
+            'scan_student@test.com', role=User.ROLE_STUDENT, group=self.group
+        )
+        self.token = Token.objects.create(user=self.student)
+        self.client = authed_client(self.token)
+
+        # Dushanba 2026-11-02, soat 09:05 (dars oynasi ichida)
+        self.lesson_dt = datetime(2026, 11, 2, 9, 5, tzinfo=ZoneInfo('Asia/Tashkent'))
+        self.lesson_date = self.lesson_dt.date()
+
+    def _scan(self, lat=41.3111, lon=69.2405, accuracy=25, code='ENTHUS8X'):
+        return self.client.post(reverse('attendance_scan'), {
+            'code': code,
+            'latitude': lat,
+            'longitude': lon,
+            'accuracy': accuracy,
+        })
+
+    @patch('api.views.now_tashkent')
+    def test_scan_success(self, mock_now):
+        mock_now.return_value = self.lesson_dt
+        resp = self._scan()
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['ok'])
+        self.assertEqual(resp.data['group'], self.group.name)
+        self.assertTrue(Attendance.objects.filter(student=self.student, date=self.lesson_date).exists())
+
+    @patch('api.views.now_tashkent')
+    def test_scan_too_far(self, mock_now):
+        mock_now.return_value = self.lesson_dt
+        resp = self._scan(lat=41.3000, lon=69.2405)
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data['code'], 'too_far')
+
+    @patch('api.views.now_tashkent')
+    def test_scan_out_of_window(self, mock_now):
+        # Soat 10:30 — oyna tashqarida
+        mock_now.return_value = self.lesson_dt.replace(hour=10, minute=30)
+        resp = self._scan()
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data['code'], 'out_of_window')
+
+    @patch('api.views.now_tashkent')
+    def test_scan_no_lesson(self, mock_now):
+        # Seshanba 2026-11-03 — juft kun, toq guruhda dars yo'q
+        no_lesson_dt = self.lesson_dt.replace(day=3)
+        mock_now.return_value = no_lesson_dt
+        resp = self._scan()
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data['code'], 'no_lesson')
+
+    @patch('api.views.now_tashkent')
+    def test_scan_already_marked(self, mock_now):
+        mock_now.return_value = self.lesson_dt
+        Attendance.objects.create(
+            student=self.student, group=self.group, date=self.lesson_date, source=Attendance.SOURCE_QR
+        )
+        resp = self._scan()
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.data['code'], 'already_marked')
+
+    @patch('api.views.now_tashkent')
+    def test_scan_external_user(self, mock_now):
+        mock_now.return_value = self.lesson_dt
+        self.student.group = None
+        self.student.save(update_fields=['group'])
+        resp = self._scan()
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.data['code'], 'external_user')
+
+    @patch('api.views.now_tashkent')
+    def test_scan_low_accuracy(self, mock_now):
+        mock_now.return_value = self.lesson_dt
+        resp = self._scan(accuracy=500)
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data['code'], 'low_accuracy')
+
+    @patch('api.views.now_tashkent')
+    def test_scan_creates_scan_event(self, mock_now):
+        mock_now.return_value = self.lesson_dt
+        self._scan(lat=41.3000, lon=69.2405)  # xato urinish
+        self.assertTrue(ScanEvent.objects.filter(student=self.student, error_code='too_far').exists())
+
+
+class AttendanceMyAndManualTests(APITestCase):
+    """Davomat my va manual endpoint testlari."""
+
+    def setUp(self):
+        self.group = UserGroup.objects.create(name='IELTS-Manual', slug='ielts-manual')
+        self.student = create_test_user(
+            'manual_student@test.com', role=User.ROLE_STUDENT, group=self.group
+        )
+        self.student_token = Token.objects.create(user=self.student)
+        self.teacher = create_test_user(
+            'manual_teacher@test.com', role=User.ROLE_TEACHER
+        )
+        self.teacher_token = Token.objects.create(user=self.teacher)
+
+    def test_attendance_my_lists_records(self):
+        Attendance.objects.create(
+            student=self.student, group=self.group, date=date(2026, 11, 1), source=Attendance.SOURCE_QR, distance_m=42
+        )
+        client = authed_client(self.student_token)
+        resp = client.get(reverse('attendance_my'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data['results']), 1)
+        self.assertEqual(resp.data['results'][0]['distance_m'], 42)
+
+    def test_attendance_manual_requires_teacher(self):
+        client = authed_client(self.student_token)
+        resp = client.post(reverse('attendance_manual'), {
+            'student': self.student.id,
+            'date': '2026-11-01',
+        })
+        self.assertEqual(resp.status_code, 403)
+
+    def test_attendance_manual_creates_record(self):
+        client = authed_client(self.teacher_token)
+        resp = client.post(reverse('attendance_manual'), {
+            'student': self.student.id,
+            'date': '2026-11-01',
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['ok'])
+        self.assertTrue(Attendance.objects.filter(
+            student=self.student, date=date(2026, 11, 1), source=Attendance.SOURCE_MANUAL
+        ).exists())
