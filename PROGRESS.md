@@ -6,8 +6,8 @@
 ## Hozirgi holat
 
 - Bosqich: 1. Telegram
-- Oxirgi commit: 1ffdcb7 — Telegram URL va sozlamalari
-- Oxirgi run: 2026-11-01 16:08 UTC
+- Oxirgi commit: dc46029 — Telegram webhook testlari
+- Oxirgi run: 2026-11-01 16:09 UTC
 
 ## Bajarilgan
 
@@ -20,10 +20,11 @@
 - [x] `api/telegram.py` yaratildi: `send_message`, `webhook` (/start, /start <payload>)
 - [x] `api/urls.py` ga telegram endpointlar qo'shildi: `telegram/webhook/<str:secret>/` (CSRF exempt) va `telegram/link-url/` (auth)
 - [x] `config/settings.py` ga Telegram sozlamalari qo'shildi
+- [x] `api/tests.py` ga Telegram testlar qo'shildi: noto'g'ri secret 403, yaroqli payload bog'laydi, eskirgan payload rad etadi
 
 ## Keyingi qadam
 
-- `api/tests.py` ga Telegram testlar qo'shish: noto'g'ri secret 403, yaroqli payload bog'laydi, eskirgan payload rad etadi
+- `api/views.py` ga `reveal_password` view qo'shish: Google credential tekshiradi, email mos kelishi kerak, `password_plain` bo'sh bo'lmasin, `@throttle_classes([AuthThrottle])`
 
 ## Ma'lum muammolar
 

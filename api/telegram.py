@@ -1,3 +1,4 @@
+import json
 import logging
 
 import requests as http_requests
@@ -44,9 +45,13 @@ def webhook(request, secret):
     if secret != expected:
         return JsonResponse({'detail': 'Ruxsat yo\'q.'}, status=status.HTTP_403_FORBIDDEN)
 
-    data = request.data if hasattr(request, 'data') else request.POST
-    if not isinstance(data, dict):
-        data = {}
+    if hasattr(request, 'data') and isinstance(request.data, dict):
+        data = request.data
+    else:
+        try:
+            data = json.loads(request.body or '{}')
+        except (json.JSONDecodeError, TypeError):
+            data = {}
 
     message = data.get('message') or {}
     chat = message.get('chat') or {}

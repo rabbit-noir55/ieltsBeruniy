@@ -1,7 +1,9 @@
 from unittest.mock import patch
 
 from django.contrib.auth import authenticate
+from django.core import signing
 from django.core.cache import cache
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient, APITestCase
@@ -203,6 +205,17 @@ class AuthTests(APITestCase):
         user.refresh_from_db()
         self.assertEqual(user.first_name, 'Asad')
 
+    def test_telegram_link_url_returns_signed_url(self):
+        user = create_test_user('tglink@test.com')
+        token = Token.objects.create(user=user)
+        client = authed_client(token)
+
+        resp = client.post(reverse('telegram_link_url'))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertIn('url', body)
+        self.assertIn('start=', body['url'])
+
     def test_google_login_creates_user_with_usable_password(self):
         """Google orqali ro'yxatdan o'tgan user password_plain bilan login qila oladi."""
         google_payload = {
@@ -228,3 +241,55 @@ class AuthTests(APITestCase):
         )
         self.assertIsNotNone(auth_user)
         self.assertEqual(auth_user.pk, user.pk)
+
+
+@override_settings(TELEGRAM_WEBHOOK_SECRET='secret123', TELEGRAM_BOT_USERNAME='testbot')
+class TelegramWebhookTests(APITestCase):
+    """Telegram webhook endpoint testlari."""
+
+    def _webhook(self, secret, payload):
+        return self.client.post(
+            reverse('telegram_webhook', args=[secret]),
+            payload,
+            content_type='application/json',
+        )
+
+    @patch('api.telegram.send_message')
+    def test_wrong_secret_returns_403(self, _mock_send):
+        resp = self._webhook('wrong-secret', {
+            'message': {'chat': {'id': 111}, 'text': '/start'},
+        })
+        self.assertEqual(resp.status_code, 403)
+
+    @patch('api.telegram.send_message')
+    def test_valid_payload_links_telegram_id(self, _mock_send):
+        user = create_test_user('tg_user@test.com')
+        payload = signing.dumps({'uid': user.id}, salt='tg-link')
+
+        resp = self._webhook('secret123', {
+            'message': {
+                'chat': {'id': 999888777, 'username': 'test_username'},
+                'text': f'/start {payload}',
+            },
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()['ok'])
+
+        user.refresh_from_db()
+        self.assertEqual(user.telegram_id, 999888777)
+        self.assertEqual(user.telegram_username, 'test_username')
+        self.assertIsNotNone(user.linked_at)
+
+    @patch('api.telegram.send_message')
+    def test_expired_payload_rejected(self, _mock_send):
+        # Imzoni yaroqsiz qilish uchun boshqa salt bilan yaratamiz
+        payload = signing.dumps({'uid': 1}, salt='wrong-salt')
+
+        resp = self._webhook('secret123', {
+            'message': {
+                'chat': {'id': 111},
+                'text': f'/start {payload}',
+            },
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()['ok'])
