@@ -5,9 +5,9 @@
 
 ## Hozirgi holat
 
-- Bosqich: 1. Telegram
-- Oxirgi commit: dc46029 — Telegram webhook testlari
-- Oxirgi run: 2026-11-01 16:09 UTC
+- Bosqich: 2. Davomat — modellar va yordamchilar
+- Oxirgi commit: 8b99b17 — reveal_password endpoint va testlari
+- Oxirgi run: 2026-11-01 16:12 UTC
 
 ## Bajarilgan
 
@@ -21,10 +21,11 @@
 - [x] `api/urls.py` ga telegram endpointlar qo'shildi: `telegram/webhook/<str:secret>/` (CSRF exempt) va `telegram/link-url/` (auth)
 - [x] `config/settings.py` ga Telegram sozlamalari qo'shildi
 - [x] `api/tests.py` ga Telegram testlar qo'shildi: noto'g'ri secret 403, yaroqli payload bog'laydi, eskirgan payload rad etadi
+- [x] `api/views.py` ga `reveal_password` view qo'shildi + URL + testlar
 
 ## Keyingi qadam
 
-- `api/views.py` ga `reveal_password` view qo'shish: Google credential tekshiradi, email mos kelishi kerak, `password_plain` bo'sh bo'lmasin, `@throttle_classes([AuthThrottle])`
+- `Attendance`, `DayOff`, `ScanEvent` modellari qo'shish (`API_CONTRACT.md` sxemasi bo'yicha) + migratsiya
 
 ## Ma'lum muammolar
 

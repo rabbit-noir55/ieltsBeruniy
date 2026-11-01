@@ -242,6 +242,47 @@ class AuthTests(APITestCase):
         self.assertIsNotNone(auth_user)
         self.assertEqual(auth_user.pk, user.pk)
 
+    @patch('api.views.http_requests.get')
+    def test_reveal_password_wrong_google_email_returns_403(self, mock_get):
+        user = create_test_user('reveal@test.com', role=User.ROLE_STUDENT)
+        user.password_plain = 'plainpass123'
+        user.save(update_fields=['password_plain'])
+        token = Token.objects.create(user=user)
+        client = authed_client(token)
+
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {'email': 'other@gmail.com'}
+
+        resp = client.post(reverse('reveal_password'), {'credential': 'fake-token'})
+        self.assertEqual(resp.status_code, 403)
+
+    @patch('api.views.http_requests.get')
+    def test_reveal_password_empty_password_returns_404(self, mock_get):
+        user = create_test_user('reveal_empty@test.com', role=User.ROLE_STUDENT)
+        token = Token.objects.create(user=user)
+        client = authed_client(token)
+
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {'email': user.email}
+
+        resp = client.post(reverse('reveal_password'), {'credential': 'fake-token'})
+        self.assertEqual(resp.status_code, 404)
+
+    @patch('api.views.http_requests.get')
+    def test_reveal_password_ok_returns_password(self, mock_get):
+        user = create_test_user('reveal_ok@test.com', role=User.ROLE_STUDENT)
+        user.password_plain = 'studentpass123'
+        user.save(update_fields=['password_plain'])
+        token = Token.objects.create(user=user)
+        client = authed_client(token)
+
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {'email': user.email}
+
+        resp = client.post(reverse('reveal_password'), {'credential': 'fake-token'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['password'], 'studentpass123')
+
 
 @override_settings(TELEGRAM_WEBHOOK_SECRET='secret123', TELEGRAM_BOT_USERNAME='testbot')
 class TelegramWebhookTests(APITestCase):

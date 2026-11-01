@@ -176,6 +176,59 @@ def change_password(request):
     return Response({'detail': 'Parol muvaffaqiyatli ozgartirildi.'})
 
 
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+@throttle_classes([AuthThrottle])
+def reveal_password(request):
+    """Google credential orqali o'quvchining password_plain ni qaytaradi."""
+    user = request.user
+    if user.role != User.ROLE_STUDENT:
+        return Response(
+            {'detail': "Faqat o'quvchi uchun."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    credential = request.data.get('credential')
+    if not credential:
+        return Response(
+            {'detail': 'Google token kiritilmadi.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        resp = http_requests.get(
+            'https://oauth2.googleapis.com/tokeninfo',
+            params={'id_token': credential},
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            return Response(
+                {'detail': 'Google token yaroqsiz.'},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        google_data = resp.json()
+    except Exception:
+        return Response(
+            {'detail': 'Google bilan ulanishda xatolik.'},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+
+    email = google_data.get('email')
+    if email != user.email:
+        return Response(
+            {'detail': 'Google hisobi mos kelmadi.'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    if not user.password_plain:
+        return Response(
+            {'detail': "Parol o'qituvchi tomonidan o'rnatilmagan."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    return Response({'password': user.password_plain})
+
+
 class ResultViewSet(viewsets.ModelViewSet):
     queryset = TestResult.objects.select_related('student').all()
     serializer_class = TestResultSerializer

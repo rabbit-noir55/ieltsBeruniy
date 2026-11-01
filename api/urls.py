@@ -15,6 +15,7 @@ urlpatterns = [
     path('auth/login/', views.login, name='login'),
     path('auth/me/', views.me, name='me'),
     path('auth/change-password/', views.change_password, name='change_password'),
+    path('auth/reveal-password/', views.reveal_password, name='reveal_password'),
     path('auth/google/', views.google_login, name='google_login'),
     path('typing/results/', views.typing_results, name='typing_results'),
     path('typing/leaderboard/', views.typing_leaderboard, name='typing_leaderboard'),
