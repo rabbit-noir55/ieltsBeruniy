@@ -6,8 +6,8 @@
 ## Hozirgi holat
 
 - Bosqich: 1. Telegram
-- Oxirgi commit: 81d1c2a — Google login test qo'shildi
-- Oxirgi run: 2026-11-01 16:06 UTC
+- Oxirgi commit: 8396414 — User telegram maydonlari
+- Oxirgi run: 2026-11-01 16:07 UTC
 
 ## Bajarilgan
 
@@ -16,10 +16,11 @@
 - [x] `api/views.py` → `google_login`: `user.set_unusable_password()` `user.set_password(random_password)` ga almashtirildi
 - [x] Data migration `0026_fix_google_unusable_passwords`: `password` `!` bilan boshlanadigan va `password_plain` bo'sh bo'lmagan userlar uchun `set_password(password_plain)` qiladi
 - [x] `api/tests.py` ga test qo'shildi: Google bilan yangi user yaratilgach `authenticate(email, password_plain)` muvaffaqiyatli o'tadi
+- [x] `User` modeliga `telegram_id`, `telegram_username`, `linked_at` maydonlari qo'shildi + migratsiya `0027`
 
 ## Keyingi qadam
 
-- 1. Telegram: `User` modeliga `telegram_id`, `telegram_username`, `linked_at` maydonlarini qo'shish va migratsiya yaratish
+- `api/telegram.py` yaratish: `send_message(chat_id, text, button_url=None)` va `webhook(request, secret)`
 
 ## Ma'lum muammolar
 

@@ -70,6 +70,9 @@ class User(AbstractUser):
     )
     is_blocked = models.BooleanField(default=False)
     password_plain = models.CharField(max_length=255, blank=True, default='')
+    telegram_id = models.BigIntegerField(null=True, blank=True, unique=True, db_index=True)
+    telegram_username = models.CharField(max_length=64, blank=True, default='')
+    linked_at = models.DateTimeField(null=True, blank=True)
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
