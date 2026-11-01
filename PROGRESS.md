@@ -5,9 +5,9 @@
 
 ## Hozirgi holat
 
-- Bosqich: 4. Davomat — admin panel
-- Oxirgi commit: fff3fd9 — Attendance API va testlari
-- Oxirgi run: 2026-11-01 16:17 UTC
+- Bosqich: 5. Yakuniy tekshiruv
+- Oxirgi commit: 5984147 — Davomat admin paneli
+- Oxirgi run: 2026-11-01 16:22 UTC
 
 ## Bajarilgan
 
@@ -27,10 +27,11 @@
 - [x] `api/attendance.py` yaratildi: Haversine `distance_m`, `is_lesson_day`, `now_tashkent`
 - [x] `api/tests.py` ga davomat yordamchi testlari qo'shildi
 - [x] `POST /attendance/scan/`, `GET /attendance/my/`, `POST /attendance/manual/` endpointlari qo'shildi + testlar
+- [x] Admin panel: bugungi davomat, istisno kunlar, oylik jurnal, CSV eksport, QR chop etish, skan jurnali, jadval ogohlantirishi
 
 ## Keyingi qadam
 
-- Admin panel "Bugungi davomat": guruh tanlash → o'quvchilar ro'yxati, ptichka yoki "+" tugmasi
+- Yakuniy tekshiruv: `python manage.py check` va `python manage.py test api --noinput` + PROGRESS xulosa
 
 ## Ma'lum muammolar
 

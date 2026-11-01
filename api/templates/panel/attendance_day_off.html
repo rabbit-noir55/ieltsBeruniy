@@ -1,0 +1,38 @@
+{% extends 'panel/base.html' %}
+{% block title %}Istisno kunlar{% endblock %}
+{% block body %}
+<div class="mx-auto max-w-6xl px-4 py-8">
+    <div class="panel-card p-6">
+        <h1 class="font-display text-2xl font-bold mb-4">Istisno kunlar</h1>
+        <form method="post" class="flex flex-wrap gap-3 mb-6">
+            {% csrf_token %}
+            <input type="date" name="date" required class="panel-input w-40">
+            <select name="group" class="panel-input w-48">
+                <option value="">Butun markaz</option>
+                {% for g in groups %}
+                <option value="{{ g.id }}">{{ g.name }}</option>
+                {% endfor %}
+            </select>
+            <input type="text" name="reason" placeholder="Sabab" class="panel-input w-64">
+            <button type="submit" class="panel-btn panel-btn-primary">Qo'shish</button>
+        </form>
+
+        <table class="panel-table w-full">
+            <thead>
+                <tr><th>Sana</th><th>Guruh</th><th>Sabab</th></tr>
+            </thead>
+            <tbody>
+                {% for d in days_off %}
+                <tr>
+                    <td>{{ d.date }}</td>
+                    <td>{{ d.group.name|default:'Butun markaz' }}</td>
+                    <td>{{ d.reason|default:'—' }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="3" class="text-black/40">Istisno kunlar mavjud emas.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

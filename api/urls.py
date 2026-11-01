@@ -64,5 +64,12 @@ urlpatterns = [
         path('tools/<int:tool_id>/edit/', panel_views.tool_edit, name='tool_edit'),
         path('tools/<int:tool_id>/delete/', panel_views.tool_delete, name='tool_delete'),
         path('games/<int:game_id>/delete/', panel_views.game_delete, name='game_delete'),
+        path('attendance/', panel_views.attendance_today, name='attendance_today'),
+        path('attendance/day-off/', panel_views.attendance_day_off, name='attendance_day_off'),
+        path('attendance/monthly/', panel_views.attendance_monthly, name='attendance_monthly'),
+        path('attendance/export-csv/', panel_views.attendance_export_csv, name='attendance_export_csv'),
+        path('attendance/qr/', panel_views.attendance_qr, name='attendance_qr'),
+        path('attendance/scan-log/', panel_views.attendance_scan_log, name='attendance_scan_log'),
+        path('attendance/schedule-alert/', panel_views.attendance_schedule_alert, name='attendance_schedule_alert'),
     ], 'panel'), namespace='panel')),
 ] + router.urls

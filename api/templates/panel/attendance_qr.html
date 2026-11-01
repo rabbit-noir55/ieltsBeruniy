@@ -1,0 +1,12 @@
+{% extends 'panel/base.html' %}
+{% block title %}QR kod{% endblock %}
+{% block body %}
+<div class="mx-auto max-w-2xl px-4 py-8 text-center">
+    <div class="panel-card p-8">
+        <h1 class="font-display text-2xl font-bold mb-4">Davomat QR kodi</h1>
+        <p class="text-black/60 dark:text-white/60 mb-6">Kod: <strong class="text-xl tracking-widest">{{ code }}</strong></p>
+        <img src="data:image/png;base64,{{ qr_base64 }}" alt="QR code" class="mx-auto mb-6 rounded-xl border border-black/10 dark:border-white/10">
+        <button onclick="window.print()" class="panel-btn panel-btn-primary">Chop etish</button>
+    </div>
+</div>
+{% endblock %}

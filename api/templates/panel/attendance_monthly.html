@@ -1,0 +1,48 @@
+{% extends 'panel/base.html' %}
+{% block title %}Oylik jurnal{% endblock %}
+{% block body %}
+<div class="mx-auto max-w-7xl px-4 py-8">
+    <div class="panel-card p-6">
+        <h1 class="font-display text-2xl font-bold mb-4">Oylik jurnal</h1>
+        <form method="get" class="flex flex-wrap gap-3 mb-6">
+            <select name="group" class="panel-input w-48">
+                <option value="">Guruhni tanlang</option>
+                {% for g in groups %}
+                <option value="{{ g.id }}" {% if group and group.id == g.id %}selected{% endif %}>{{ g.name }}</option>
+                {% endfor %}
+            </select>
+            <input type="number" name="year" value="{{ year }}" class="panel-input w-28">
+            <input type="number" name="month" value="{{ month }}" min="1" max="12" class="panel-input w-24">
+            <button type="submit" class="panel-btn panel-btn-primary">Ko'rish</button>
+            {% if group %}
+            <a href="{% url 'panel:attendance_export_csv' %}?group={{ group.id }}&year={{ year }}&month={{ month }}" class="panel-btn panel-btn-ghost">CSV yuklash</a>
+            {% endif %}
+        </form>
+
+        {% if group %}
+        <div class="overflow-x-auto">
+            <table class="panel-table w-full text-sm">
+                <thead>
+                    <tr>
+                        <th class="sticky left-0 bg-white dark:bg-[#141416]">O'quvchi</th>
+                        {% for d in days %}<th>{{ d }}</th>{% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in students %}
+                    <tr>
+                        <td class="sticky left-0 bg-white dark:bg-[#141416] whitespace-nowrap">{{ s.name }}</td>
+                        {% for present in s.days %}
+                        <td class="text-center">{% if present %}✅{% else %}—{% endif %}</td>
+                        {% endfor %}
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="{{ days|length|add:1 }}" class="text-black/40">O'quvchilar topilmadi.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

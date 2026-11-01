@@ -1,0 +1,41 @@
+{% extends 'panel/base.html' %}
+{% block title %}Skan jurnali{% endblock %}
+{% block body %}
+<div class="mx-auto max-w-6xl px-4 py-8">
+    <div class="panel-card p-6">
+        <h1 class="font-display text-2xl font-bold mb-4">Skan jurnali</h1>
+        <form method="get" class="flex gap-3 mb-6">
+            <input type="date" name="date" value="{{ date }}" class="panel-input w-40">
+            <button type="submit" class="panel-btn panel-btn-primary">Filtrlash</button>
+            <a href="{% url 'panel:attendance_scan_log' %}" class="panel-btn panel-btn-ghost">Tozalash</a>
+        </form>
+
+        <table class="panel-table w-full text-sm">
+            <thead>
+                <tr>
+                    <th>Sana/vaqt</th>
+                    <th>O'quvchi</th>
+                    <th>Guruh</th>
+                    <th>Kod</th>
+                    <th>Masofa</th>
+                    <th>Xato kodi</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for scan in scans %}
+                <tr>
+                    <td>{{ scan.created_at }}</td>
+                    <td>{{ scan.student.full_name }}</td>
+                    <td>{{ scan.group.name|default:'—' }}</td>
+                    <td>{{ scan.code }}</td>
+                    <td>{{ scan.distance_m|default:'—'|floatformat:0 }} m</td>
+                    <td>{{ scan.error_code|default:'OK' }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="text-black/40">Yozuvlar topilmadi.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

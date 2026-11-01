@@ -1,3 +1,5 @@
+import base64
+from datetime import datetime as _dt
 from datetime import timedelta
 from zoneinfo import ZoneInfo
 
@@ -9,7 +11,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import TestResult, TypingResult, User, UserGroup
+from .attendance import is_lesson_day, now_tashkent
+from .models import Attendance, DayOff, ScanEvent, TestResult, TypingResult, User, UserGroup
 from .utils import image_to_data_url
 
 SKILL_LABELS = dict(TestResult.SKILL_CHOICES)
@@ -833,3 +836,215 @@ def tool_delete(request, tool_id):
     if request.method == 'POST':
         tool.delete()
     return redirect('panel:tool_list')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Davomat (attendance) paneli
+# ─────────────────────────────────────────────────────────────────────────────
+import csv as _csv
+import io as _io
+
+import qrcode
+from django.conf import settings as _settings
+from django.http import HttpResponse
+
+
+@login_required
+@user_passes_test(is_teacher, login_url='panel:login')
+def attendance_today(request):
+    """Bugungi davomat: guruh tanlash va o'quvchilar ro'yxati."""
+    timezone.activate(TASHKENT_TZ)
+    today = now_tashkent().date()
+    groups = UserGroup.objects.order_by('name')
+    group_id = request.GET.get('group') or request.POST.get('group')
+    group = None
+    students = []
+    lesson_day = False
+
+    if group_id:
+        group = get_object_or_404(UserGroup, id=group_id)
+        lesson_day = is_lesson_day(group, today)
+        all_students = User.objects.filter(role=User.ROLE_STUDENT, group=group).order_by('first_name', 'last_name')
+        attendance_map = {
+            a.student_id: a for a in Attendance.objects.filter(student__in=all_students, date=today)
+        }
+        for s in all_students:
+            att = attendance_map.get(s.id)
+            students.append({
+                'id': s.id,
+                'full_name': s.full_name,
+                'present': att is not None,
+                'source': att.source if att else None,
+                'distance_m': att.distance_m if att else None,
+            })
+
+    if request.method == 'POST' and group:
+        student_id = request.POST.get('student_id')
+        if student_id:
+            student = get_object_or_404(User, id=student_id, role=User.ROLE_STUDENT, group=group)
+            Attendance.objects.get_or_create(
+                student=student,
+                date=today,
+                defaults={'group': group, 'source': Attendance.SOURCE_MANUAL, 'marked_by': request.user},
+            )
+            return redirect(f"{reverse('panel:attendance_today')}?group={group.id}")
+
+    return render(request, 'panel/attendance_today.html', {
+        'groups': groups,
+        'group': group,
+        'students': students,
+        'today': today,
+        'lesson_day': lesson_day,
+    })
+
+
+@login_required
+@user_passes_test(is_teacher, login_url='panel:login')
+def attendance_day_off(request):
+    """Istisno kunlar: sana + guruh + sabab."""
+    timezone.activate(TASHKENT_TZ)
+    if request.method == 'POST':
+        date_str = request.POST.get('date')
+        group_id = request.POST.get('group') or None
+        reason = (request.POST.get('reason') or '').strip()
+        try:
+            off_date = _dt.strptime(date_str, '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            off_date = None
+        if off_date:
+            DayOff.objects.get_or_create(
+                date=off_date,
+                group_id=group_id,
+                defaults={'reason': reason},
+            )
+        return redirect('panel:attendance_day_off')
+
+    days_off = DayOff.objects.select_related('group').order_by('-date')
+    groups = UserGroup.objects.order_by('name')
+    return render(request, 'panel/attendance_day_off.html', {
+        'days_off': days_off,
+        'groups': groups,
+    })
+
+
+@login_required
+@user_passes_test(is_teacher, login_url='panel:login')
+def attendance_monthly(request):
+    """Oylik jurnal: o'quvchi × kun matritsasi."""
+    timezone.activate(TASHKENT_TZ)
+    year = int(request.GET.get('year', now_tashkent().year))
+    month = int(request.GET.get('month', now_tashkent().month))
+    group_id = request.GET.get('group')
+    group = None
+    students = []
+    days = []
+
+    if group_id:
+        group = get_object_or_404(UserGroup, id=group_id)
+        students_qs = User.objects.filter(role=User.ROLE_STUDENT, group=group).order_by('first_name', 'last_name')
+        from calendar import monthrange
+        _, last_day = monthrange(year, month)
+        days = list(range(1, last_day + 1))
+
+        attendances = Attendance.objects.filter(
+            student__group=group,
+            date__year=year,
+            date__month=month,
+        ).values('student_id', 'date')
+        att_set = {(a['student_id'], a['date'].day) for a in attendances}
+
+        for s in students_qs:
+            row = {'id': s.id, 'name': s.full_name, 'days': [(s.id, d) in att_set for d in days]}
+            students.append(row)
+
+    groups = UserGroup.objects.order_by('name')
+    return render(request, 'panel/attendance_monthly.html', {
+        'groups': groups,
+        'group': group,
+        'students': students,
+        'days': days,
+        'year': year,
+        'month': month,
+    })
+
+
+@login_required
+@user_passes_test(is_teacher, login_url='panel:login')
+def attendance_export_csv(request):
+    """Oy bo'yicha davomat CSV eksporti."""
+    timezone.activate(TASHKENT_TZ)
+    year = int(request.GET.get('year', now_tashkent().year))
+    month = int(request.GET.get('month', now_tashkent().month))
+    group_id = request.GET.get('group')
+    if not group_id:
+        return redirect('panel:attendance_monthly')
+
+    group = get_object_or_404(UserGroup, id=group_id)
+    from calendar import monthrange
+    _, last_day = monthrange(year, month)
+
+    students = list(User.objects.filter(role=User.ROLE_STUDENT, group=group).order_by('first_name', 'last_name'))
+    attendances = Attendance.objects.filter(
+        student__group=group,
+        date__year=year,
+        date__month=month,
+    ).values('student_id', 'date')
+    att_set = {(a['student_id'], a['date'].day) for a in attendances}
+
+    output = _io.StringIO()
+    writer = _csv.writer(output)
+    header = ['O\'quvchi'] + [str(d) for d in range(1, last_day + 1)]
+    writer.writerow(header)
+    for s in students:
+        row = [s.full_name] + ['+' if (s.id, d) in att_set else '-' for d in range(1, last_day + 1)]
+        writer.writerow(row)
+
+    response = HttpResponse(output.getvalue(), content_type='text/csv; charset=utf-8-sig')
+    response['Content-Disposition'] = f'attachment; filename="davomat_{group.slug}_{year}-{month:02d}.csv"'
+    return response
+
+
+@login_required
+@user_passes_test(is_teacher, login_url='panel:login')
+def attendance_qr(request):
+    """QR kod chop etish sahifasi."""
+    code = _settings.ATTENDANCE_CODE
+    img = qrcode.make(code)
+    buffer = _io.BytesIO()
+    img.save(buffer, format='PNG')
+    qr_base64 = base64.b64encode(buffer.getvalue()).decode()
+    return render(request, 'panel/attendance_qr.html', {
+        'code': code,
+        'qr_base64': qr_base64,
+    })
+
+
+@login_required
+@user_passes_test(is_teacher, login_url='panel:login')
+def attendance_scan_log(request):
+    """Skan urinishlari jurnali."""
+    timezone.activate(TASHKENT_TZ)
+    date_str = request.GET.get('date')
+    scans = ScanEvent.objects.select_related('student', 'group').order_by('-created_at')
+    if date_str:
+        try:
+            log_date = _dt.strptime(date_str, '%Y-%m-%d').date()
+            scans = scans.filter(date=log_date)
+        except (ValueError, TypeError):
+            pass
+    return render(request, 'panel/attendance_scan_log.html', {
+        'scans': scans[:200],
+        'date': date_str,
+    })
+
+
+@login_required
+@user_passes_test(is_teacher, login_url='panel:login')
+def attendance_schedule_alert(request):
+    """Jadvali to'liq bo'lmagan guruhlar ro'yxati."""
+    groups = UserGroup.objects.filter(
+        Q(schedule_type='') | Q(schedule_time__isnull=True)
+    ).order_by('name')
+    return render(request, 'panel/attendance_schedule_alert.html', {
+        'groups': groups,
+    })

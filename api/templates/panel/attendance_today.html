@@ -1,0 +1,57 @@
+{% extends 'panel/base.html' %}
+{% block title %}Bugungi davomat{% endblock %}
+{% block body %}
+<div class="mx-auto max-w-6xl px-4 py-8">
+    <div class="panel-card p-6">
+        <h1 class="font-display text-2xl font-bold mb-4">Bugungi davomat</h1>
+        <form method="get" class="flex gap-3 mb-6">
+            <select name="group" class="panel-input max-w-xs">
+                <option value="">Guruhni tanlang</option>
+                {% for g in groups %}
+                <option value="{{ g.id }}" {% if group and group.id == g.id %}selected{% endif %}>{{ g.name }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="panel-btn panel-btn-primary">Ko'rish</button>
+        </form>
+
+        {% if group %}
+        <div class="mb-4 text-sm text-black/60 dark:text-white/60">
+            Sana: <strong>{{ today }}</strong> | Dars kuni: <strong>{% if lesson_day %}Ha{% else %}Yo'q{% endif %}</strong>
+        </div>
+        <table class="panel-table w-full">
+            <thead>
+                <tr>
+                    <th>O'quvchi</th>
+                    <th>Holat</th>
+                    <th>Manba</th>
+                    <th>Masofa</th>
+                    <th>Amal</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in students %}
+                <tr>
+                    <td>{{ s.full_name }}</td>
+                    <td>{% if s.present %}✅ Keldi{% else %}❌ Yo'q{% endif %}</td>
+                    <td>{{ s.source|default:'—' }}</td>
+                    <td>{{ s.distance_m|default:'—' }} m</td>
+                    <td>
+                        {% if not s.present %}
+                        <form method="post" class="inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="group" value="{{ group.id }}">
+                            <input type="hidden" name="student_id" value="{{ s.id }}">
+                            <button type="submit" class="panel-btn panel-btn-ghost text-xs py-1 px-3">+ Qo'lda belgilash</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="text-black/40">O'quvchilar topilmadi.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
