@@ -1,13 +1,16 @@
 from django.urls import include, path
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework.routers import DefaultRouter
 
-from . import panel_views, views
+from . import panel_views, telegram, views
 
 router = DefaultRouter()
 router.register('results', views.ResultViewSet, basename='result')
 
 urlpatterns = [
     path('health/', views.health, name='health'),
+    path('telegram/webhook/<str:secret>/', csrf_exempt(telegram.webhook), name='telegram_webhook'),
+    path('telegram/link-url/', telegram.link_url, name='telegram_link_url'),
     path('auth/register/', views.register, name='register'),
     path('auth/login/', views.login, name='login'),
     path('auth/me/', views.me, name='me'),

@@ -5,7 +5,8 @@ from django.conf import settings
 from django.core import signing
 from django.http import JsonResponse
 from django.utils import timezone
-from rest_framework import status
+from rest_framework import permissions, status
+from rest_framework.decorators import api_view, permission_classes
 
 from .models import User
 
@@ -85,3 +86,15 @@ def webhook(request, secret):
         return JsonResponse({'ok': True})
 
     return JsonResponse({'ok': True})
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def link_url(request):
+    """Auth user uchun Telegram bog'lash havolasini qaytaradi."""
+    bot_username = getattr(settings, 'TELEGRAM_BOT_USERNAME', '')
+    if not bot_username:
+        bot_username = 'ielts_beruniy_bot'
+    payload = signing.dumps({'uid': request.user.id}, salt='tg-link')
+    url = f'https://t.me/{bot_username}?start={payload}'
+    return JsonResponse({'url': url})

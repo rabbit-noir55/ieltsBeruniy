@@ -6,8 +6,8 @@
 ## Hozirgi holat
 
 - Bosqich: 1. Telegram
-- Oxirgi commit: 9c728e5 — api/telegram.py yaratildi
-- Oxirgi run: 2026-11-01 16:07 UTC
+- Oxirgi commit: 1ffdcb7 — Telegram URL va sozlamalari
+- Oxirgi run: 2026-11-01 16:08 UTC
 
 ## Bajarilgan
 
@@ -18,10 +18,12 @@
 - [x] `api/tests.py` ga test qo'shildi: Google bilan yangi user yaratilgach `authenticate(email, password_plain)` muvaffaqiyatli o'tadi
 - [x] `User` modeliga `telegram_id`, `telegram_username`, `linked_at` maydonlari qo'shildi + migratsiya `0027`
 - [x] `api/telegram.py` yaratildi: `send_message`, `webhook` (/start, /start <payload>)
+- [x] `api/urls.py` ga telegram endpointlar qo'shildi: `telegram/webhook/<str:secret>/` (CSRF exempt) va `telegram/link-url/` (auth)
+- [x] `config/settings.py` ga Telegram sozlamalari qo'shildi
 
 ## Keyingi qadam
 
-- `api/urls.py` ga telegram endpointlar qo'shish: `telegram/webhook/<str:secret>/` (AllowAny, CSRF exempt) va `telegram/link-url/` (auth)
+- `api/tests.py` ga Telegram testlar qo'shish: noto'g'ri secret 403, yaroqli payload bog'laydi, eskirgan payload rad etadi
 
 ## Ma'lum muammolar
 
