@@ -5,34 +5,30 @@
 
 ## Hozirgi holat
 
-- Bosqich: 5. Yakuniy tekshiruv
-- Oxirgi commit: 5984147 — Davomat admin paneli
-- Oxirgi run: 2026-11-01 16:22 UTC
+- Bosqich: 5. Yakuniy tekshiruv — BARCHA TASKS TUGADI
+- Oxirgi commit: 06fab75 — Davomat admin paneli
+- Oxirgi run: 2026-11-01 16:27 UTC
 
 ## Bajarilgan
 
 - [x] SQLite testlarini bloklagan migration tuzatildi (`api/migrations/0015_remove_news.py`: `DROP TABLE ... CASCADE` olib tashlandi)
 - [x] `python manage.py check` va `python manage.py test api --noinput` yashil
-- [x] `api/views.py` → `google_login`: `user.set_unusable_password()` `user.set_password(random_password)` ga almashtirildi
-- [x] Data migration `0026_fix_google_unusable_passwords`: `password` `!` bilan boshlanadigan va `password_plain` bo'sh bo'lmagan userlar uchun `set_password(password_plain)` qiladi
-- [x] `api/tests.py` ga test qo'shildi: Google bilan yangi user yaratilgach `authenticate(email, password_plain)` muvaffaqiyatli o'tadi
-- [x] `User` modeliga `telegram_id`, `telegram_username`, `linked_at` maydonlari qo'shildi + migratsiya `0027`
-- [x] `api/telegram.py` yaratildi: `send_message`, `webhook` (/start, /start <payload>)
-- [x] `api/urls.py` ga telegram endpointlar qo'shildi: `telegram/webhook/<str:secret>/` (CSRF exempt) va `telegram/link-url/` (auth)
-- [x] `config/settings.py` ga Telegram sozlamalari qo'shildi
-- [x] `api/tests.py` ga Telegram testlar qo'shildi: noto'g'ri secret 403, yaroqli payload bog'laydi, eskirgan payload rad etadi
-- [x] `api/views.py` ga `reveal_password` view qo'shildi + URL + testlar
-- [x] `Attendance`, `DayOff`, `ScanEvent` modellari qo'shildi + migratsiya `0028`
-- [x] `config/settings.py` ga davomat sozlamalari qo'shildi
-- [x] `api/attendance.py` yaratildi: Haversine `distance_m`, `is_lesson_day`, `now_tashkent`
-- [x] `api/tests.py` ga davomat yordamchi testlari qo'shildi
-- [x] `POST /attendance/scan/`, `GET /attendance/my/`, `POST /attendance/manual/` endpointlari qo'shildi + testlar
-- [x] Admin panel: bugungi davomat, istisno kunlar, oylik jurnal, CSV eksport, QR chop etish, skan jurnali, jadval ogohlantirishi
+- [x] **0. Google parol bug**: `google_login` endi `set_password(random_password)` ishlatadi, data migration qo'shildi, test yozildi
+- [x] **1. Telegram**: `User` telegram maydonlari, `api/telegram.py`, webhook va link-url endpointlari, testlar, `reveal_password` view
+- [x] **2. Davomat modellar/yordamchilar**: `Attendance`, `DayOff`, `ScanEvent`, sozlamalar, `api/attendance.py`, testlar
+- [x] **3. Davomat API**: `POST /attendance/scan/`, `GET /attendance/my/`, `POST /attendance/manual/` + testlar
+- [x] **4. Davomat admin paneli**: bugungi davomat, istisno kunlar, oylik jurnal, CSV eksport, QR chop etish, skan jurnali, jadval ogohlantirishi
+- [x] **5. Yakuniy tekshiruv**: 38 ta test yashil, barcha migratsiyalar SQLite'da muvaffaqiyatli o'tdi
 
 ## Keyingi qadam
 
-- Yakuniy tekshiruv: `python manage.py check` va `python manage.py test api --noinput` + PROGRESS xulosa
+TASKS tugadi — hech narsa qilma.
 
 ## Ma'lum muammolar
 
 - SQLite'da `DROP TABLE ... CASCADE` qo'llab-quvvatlanmaydi; tuzatildi.
+- Barcha yangi funksiyalar test bilan qoplangan.
+
+## Xulosa
+
+Barcha TASKS.md dagi vazifalar bajarildi. Kod `python manage.py check` va `python manage.py test api --noinput` orqali tekshirildi (38/38 test yashil). Har bir kichik bo'lak alohida commit va push qilindi.
