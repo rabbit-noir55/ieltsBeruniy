@@ -5,9 +5,9 @@
 
 ## Hozirgi holat
 
-- Bosqich: 0. Google parol bug
-- Oxirgi commit: ef42716 — Google parol data migration
-- Oxirgi run: 2026-11-01 16:05 UTC
+- Bosqich: 1. Telegram
+- Oxirgi commit: 81d1c2a — Google login test qo'shildi
+- Oxirgi run: 2026-11-01 16:06 UTC
 
 ## Bajarilgan
 
@@ -15,10 +15,11 @@
 - [x] `python manage.py check` va `python manage.py test api --noinput` yashil
 - [x] `api/views.py` → `google_login`: `user.set_unusable_password()` `user.set_password(random_password)` ga almashtirildi
 - [x] Data migration `0026_fix_google_unusable_passwords`: `password` `!` bilan boshlanadigan va `password_plain` bo'sh bo'lmagan userlar uchun `set_password(password_plain)` qiladi
+- [x] `api/tests.py` ga test qo'shildi: Google bilan yangi user yaratilgach `authenticate(email, password_plain)` muvaffaqiyatli o'tadi
 
 ## Keyingi qadam
 
-- `api/tests.py` ga test qo'shish: Google bilan yangi user yaratilgach `authenticate(email, password_plain)` muvaffaqiyatli o'tadi
+- 1. Telegram: `User` modeliga `telegram_id`, `telegram_username`, `linked_at` maydonlarini qo'shish va migratsiya yaratish
 
 ## Ma'lum muammolar
 

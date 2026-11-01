@@ -1,3 +1,6 @@
+from unittest.mock import patch
+
+from django.contrib.auth import authenticate
 from django.core.cache import cache
 from django.urls import reverse
 from rest_framework.authtoken.models import Token
@@ -199,3 +202,29 @@ class AuthTests(APITestCase):
         self.assertEqual(resp.status_code, 200)
         user.refresh_from_db()
         self.assertEqual(user.first_name, 'Asad')
+
+    def test_google_login_creates_user_with_usable_password(self):
+        """Google orqali ro'yxatdan o'tgan user password_plain bilan login qila oladi."""
+        google_payload = {
+            'email': 'google_user@test.com',
+            'sub': '123456789',
+            'given_name': 'Google',
+            'family_name': 'User',
+        }
+        with patch('api.views.http_requests.get') as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.json.return_value = google_payload
+
+            resp = self.client.post(reverse('google_login'), {'credential': 'fake-token'})
+            self.assertEqual(resp.status_code, 201)
+            self.assertIn('token', resp.data)
+
+        user = User.objects.get(email='google_user@test.com')
+        self.assertTrue(user.password_plain)
+        self.assertTrue(user.check_password(user.password_plain))
+
+        auth_user = authenticate(
+            username='google_user@test.com', password=user.password_plain
+        )
+        self.assertIsNotNone(auth_user)
+        self.assertEqual(auth_user.pk, user.pk)
