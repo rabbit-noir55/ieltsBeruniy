@@ -1,0 +1,40 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode-go/kimi-k2.7-code",
+  "providers": {
+    "opencode-go": {
+      "settings": {
+        "apiKey": "{env:OPENCODE_API_KEY}"
+      }
+    }
+  },
+  "compaction": {
+    "auto": true,
+    "keep": {
+      "tokens": 24000
+    }
+  },
+  "permissions": [
+    { "action": "shell", "resource": "*", "effect": "allow" },
+
+    { "action": "shell", "resource": "rm -rf *", "effect": "deny" },
+    { "action": "shell", "resource": "rm -fr *", "effect": "deny" },
+    { "action": "shell", "resource": "git push --force*", "effect": "deny" },
+    { "action": "shell", "resource": "git push -f*", "effect": "deny" },
+    { "action": "shell", "resource": "git reset --hard*", "effect": "deny" },
+    { "action": "shell", "resource": "git clean -fd*", "effect": "deny" },
+    { "action": "shell", "resource": "git branch -D*", "effect": "deny" },
+    { "action": "shell", "resource": "python manage.py flush*", "effect": "deny" },
+    { "action": "shell", "resource": "pip install *", "effect": "deny" },
+    { "action": "shell", "resource": "pip install -r requirements.txt", "effect": "allow" },
+
+    { "action": "edit", "resource": "render.yaml", "effect": "deny" },
+    { "action": "edit", "resource": "entrypoint.sh", "effect": "deny" },
+    { "action": "edit", "resource": "Dockerfile", "effect": "deny" },
+    { "action": "edit", "resource": "requirements.txt", "effect": "deny" },
+    { "action": "edit", "resource": ".git/*", "effect": "deny" },
+    { "action": "edit", "resource": ".env*", "effect": "deny" },
+
+    { "action": "read", "resource": ".env*", "effect": "deny" }
+  ]
+}

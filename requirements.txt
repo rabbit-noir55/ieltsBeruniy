@@ -9,5 +9,6 @@ django-storages
 boto3
 huggingface_hub
 pillow
+qrcode
 requests
 python-dotenv

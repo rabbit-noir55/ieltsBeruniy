@@ -9,3 +9,6 @@ media/
 server.log
 server_log.txt
 server_run.log
+
+# Agent log (CI)
+agent-log.jsonl
