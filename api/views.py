@@ -134,7 +134,7 @@ def google_login(request):
         role=User.ROLE_STUDENT,
         password_plain=random_password,
     )
-    user.set_unusable_password()
+    user.set_password(random_password)
     user.save()  # save() will auto-generate unique username from email
 
     token, _ = Token.objects.get_or_create(user=user)

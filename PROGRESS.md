@@ -6,18 +6,18 @@
 ## Hozirgi holat
 
 - Bosqich: 0. Google parol bug
-- Oxirgi commit: d6e9bb5 — SQLite migration tuzatildi
+- Oxirgi commit: 0a37afd — Google login parol tuzatildi
 - Oxirgi run: 2026-11-01 16:04 UTC
 
 ## Bajarilgan
 
 - [x] SQLite testlarini bloklagan migration tuzatildi (`api/migrations/0015_remove_news.py`: `DROP TABLE ... CASCADE` olib tashlandi)
 - [x] `python manage.py check` va `python manage.py test api --noinput` yashil
+- [x] `api/views.py` → `google_login`: `user.set_unusable_password()` `user.set_password(random_password)` ga almashtirildi
 
 ## Keyingi qadam
 
-- `api/views.py` → `google_login`: `user.set_unusable_password()` ni `user.set_password(random_password)` ga almashtirish
-- Google orqali ro'yxatdan o'tgan userlar uchun `password_plain` bilan `authenticate()` testi qo'shish
+- Data migration yaratish: `password` `!` bilan boshlanadigan va `password_plain` bo'sh bo'lmagan userlar uchun `set_password(password_plain)` qilish
 
 ## Ma'lum muammolar
 
