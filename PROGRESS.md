@@ -7,7 +7,7 @@
 
 - Bosqich: 5. Yakuniy tekshiruv — BARCHA TASKS TUGADI
 - Oxirgi commit: 06fab75 — Davomat admin paneli
-- Oxirgi run: 2026-11-01 16:27 UTC
+- Oxirgi run: qo'lda tuzatishlar (2026-11-02)
 
 ## Bajarilgan
 
@@ -22,7 +22,14 @@
 
 ## Keyingi qadam
 
-TASKS tugadi — hech narsa qilma.
+Qo'lda tuzatilganlar (2026-11-02):
+- [x] Vaqt oynasi: endi faqat `schedule_time` .. +15 daqiqa (avval `abs()` bilan ±15 edi)
+- [x] `schedule_time` bo'sh bo'lsa `no_schedule` (avval tekshiruv o'tkazib yuborilardi)
+- [x] Telegram tugmasi `web_app` turida (avval `url` — Mini App ochilmasdi)
+- [x] `telegram_id` bog'lashda `IntegrityError` ushlanadi
+- [x] Parallel skanda `IntegrityError` → 409 `already_marked`
+- [x] `reveal_password` email solishtiruvi case-insensitive
+- [x] 42 test (4 yangi: oynadan oldin, aynan boshlanishda, jadval yo'q, web_app tugmasi)
 
 ## Ma'lum muammolar
 

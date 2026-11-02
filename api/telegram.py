@@ -4,6 +4,7 @@ import logging
 import requests as http_requests
 from django.conf import settings
 from django.core import signing
+from django.db import IntegrityError
 from django.http import JsonResponse
 from django.utils import timezone
 from rest_framework import permissions, status
@@ -27,8 +28,10 @@ def send_message(chat_id, text, button_url=None):
         'text': text,
     }
     if button_url:
+        # Mini App sifatida ochilishi uchun 'web_app' bo'lishi shart.
+        # 'url' bo'lsa Telegram oddiy havola ochadi va initData bo'sh qoladi.
         payload['reply_markup'] = {
-            'inline_keyboard': [[{'text': 'Web App', 'url': button_url}]]
+            'inline_keyboard': [[{'text': 'Saytni ochish', 'web_app': {'url': button_url}}]]
         }
 
     try:
@@ -77,11 +80,17 @@ def webhook(request, secret):
             user_id = decoded.get('uid')
             user = User.objects.filter(pk=user_id).first()
             if user:
-                user.telegram_id = chat_id
-                user.telegram_username = (chat.get('username') or '')[:64]
-                user.linked_at = timezone.now()
-                user.save(update_fields=['telegram_id', 'telegram_username', 'linked_at'])
-                send_message(chat_id, '✅ Ulandi')
+                try:
+                    user.telegram_id = chat_id
+                    user.telegram_username = (chat.get('username') or '')[:64]
+                    user.linked_at = timezone.now()
+                    user.save(update_fields=['telegram_id', 'telegram_username', 'linked_at'])
+                    send_message(chat_id, '✅ Ulandi')
+                except IntegrityError:
+                    send_message(
+                        chat_id,
+                        "❌ Bu Telegram akkaunt boshqa hisobga bog'langan.",
+                    )
             else:
                 send_message(chat_id, '❌ Foydalanuvchi topilmadi')
         except signing.SignatureExpired:

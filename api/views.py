@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 from django.contrib.auth import authenticate
 from django.core.cache import cache
+from django.db import IntegrityError
 from django.db.models import Avg, Count, Max, Q
 from django.http import JsonResponse
 from django.utils import timezone
@@ -217,7 +218,7 @@ def reveal_password(request):
         )
 
     email = google_data.get('email')
-    if email != user.email:
+    if (email or '').strip().lower() != (user.email or '').strip().lower():
         return Response(
             {'detail': 'Google hisobi mos kelmadi.'},
             status=status.HTTP_403_FORBIDDEN,
@@ -924,31 +925,38 @@ def attendance_scan(request):
         return error_response('Bugun bu guruhda dars yoq.', 'no_lesson')
 
     # 8. Dars vaqti oynasidami
-    if group.schedule_time:
-        now = now_tashkent()
-        lesson_start = now.replace(
-            hour=group.schedule_time.hour,
-            minute=group.schedule_time.minute,
-            second=0,
-            microsecond=0,
-        )
-        window = settings.ATTENDANCE_WINDOW_MIN
-        delta_minutes = abs((now - lesson_start).total_seconds()) / 60
-        if delta_minutes > window:
-            return error_response('Dars vaqti oynasidan tashqarida.', 'out_of_window')
+    #    Qoida: dars boshlanishidan boshlab, +ATTENDANCE_WINDOW_MIN daqiqa ichida.
+    #    Oldinroq (masalan 15 daqiqa avval) ruxsat YO'Q.
+    if not group.schedule_time:
+        return error_response("Guruh jadvali to'liq emas.", 'no_schedule')
+
+    now = now_tashkent()
+    lesson_start = now.replace(
+        hour=group.schedule_time.hour,
+        minute=group.schedule_time.minute,
+        second=0,
+        microsecond=0,
+    )
+    window_end = lesson_start + timedelta(minutes=settings.ATTENDANCE_WINDOW_MIN)
+    if now < lesson_start or now > window_end:
+        return error_response('Dars vaqti oynasidan tashqarida.', 'out_of_window')
 
     # 9. Allaqachon belgilanganmi
     if Attendance.objects.filter(student=user, date=today).exists():
         return error_response('Bugun allaqachon belgilangan.', 'already_marked')
 
     # 10. Davomat yaratish
-    attendance = Attendance.objects.create(
-        student=user,
-        group=group,
-        date=today,
-        source=Attendance.SOURCE_QR,
-        distance_m=round(distance_value),
-    )
+    try:
+        attendance = Attendance.objects.create(
+            student=user,
+            group=group,
+            date=today,
+            source=Attendance.SOURCE_QR,
+            distance_m=round(distance_value),
+        )
+    except IntegrityError:
+        # Parallel ikki so'rov: unique (student, date) cheklovi
+        return error_response('Bugun allaqachon belgilangan.', 'already_marked')
     _log_scan_event(user, group, today, code, latitude, longitude, accuracy, distance_value, '')
 
     return Response({

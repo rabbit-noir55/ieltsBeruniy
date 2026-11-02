@@ -338,6 +338,25 @@ class TelegramWebhookTests(APITestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.json()['ok'])
 
+    @patch('api.telegram.http_requests.post')
+    def test_send_message_uses_web_app_button(self, mock_post):
+        """Mini App ochilishi uchun tugma 'web_app' turida bo'lishi shart.
+
+        'url' bo'lsa Telegram oddiy havola ochadi va initData bo'sh qoladi.
+        """
+        from django.test import override_settings
+        from .telegram import send_message
+
+        mock_post.return_value.status_code = 200
+        with override_settings(TELEGRAM_BOT_TOKEN='123:test'):
+            send_message(555, 'salom', button_url='https://example.com')
+
+        payload = mock_post.call_args.kwargs['json']
+        button = payload['reply_markup']['inline_keyboard'][0][0]
+        self.assertIn('web_app', button)
+        self.assertNotIn('url', button)
+        self.assertEqual(button['web_app']['url'], 'https://example.com')
+
 
 class AttendanceHelperTests(APITestCase):
     """Davomat yordamchi funksiyalari testlari."""
@@ -452,6 +471,30 @@ class AttendanceScanTests(APITestCase):
         resp = self._scan()
         self.assertEqual(resp.status_code, 400)
         self.assertEqual(resp.data['code'], 'out_of_window')
+
+    @patch('api.views.now_tashkent')
+    def test_scan_before_start_rejected(self, mock_now):
+        """Dars boshlanishidan OLDIN skanerlash mumkin emas (oyna 0..+15 daqiqa)."""
+        mock_now.return_value = self.lesson_dt.replace(hour=8, minute=55)
+        resp = self._scan()
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data['code'], 'out_of_window')
+
+    @patch('api.views.now_tashkent')
+    def test_scan_exactly_at_start(self, mock_now):
+        mock_now.return_value = self.lesson_dt.replace(hour=9, minute=0, second=0, microsecond=0)
+        resp = self._scan()
+        self.assertEqual(resp.status_code, 200)
+
+    @patch('api.views.now_tashkent')
+    def test_scan_without_schedule_time(self, mock_now):
+        """Jadvalda vaqt bo'lmasa — kun bo'yi belgilashga ruxsat berilmaydi."""
+        mock_now.return_value = self.lesson_dt
+        self.group.schedule_time = None
+        self.group.save(update_fields=['schedule_time'])
+        resp = self._scan()
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data['code'], 'no_schedule')
 
     @patch('api.views.now_tashkent')
     def test_scan_no_lesson(self, mock_now):

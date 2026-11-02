@@ -91,7 +91,8 @@ Xato:
 | `low_accuracy` | 400 | GPS aniqligi past |
 | `too_far` | 400 | Markaz hududida emas |
 | `no_lesson` | 400 | Bugun bu guruhda dars yo'q |
-| `out_of_window` | 400 | Dars vaqti oynasidan tashqarida |
+| `no_schedule` | 400 | Guruh jadvalida vaqt yo'q |
+| `out_of_window` | 400 | Dars vaqti oynasidan tashqarida (oyna: `schedule_time` .. +15 daqiqa) |
 | `already_marked` | 409 | Bugun allaqachon belgilangan |
 
 ### `GET /attendance/my/` — auth
