@@ -44,6 +44,24 @@ Migratsiya **ruxsat etilgan**, lekin qat'iy qoida bilan:
 - Har migratsiya uchun avval `python manage.py makemigrations api`, keyin `migrate` (SQLite'da) sinab ko'r.
 - Migratsiya faylini commit qil — u alohida ko'rib chiqiladi.
 
+### Data migration tuzog'i
+
+`apps.get_model('api', 'User')` **tarixiy model** qaytaradi — unda `set_password()`,
+`full_name`, custom `save()` kabi **metodlar yo'q**, faqat maydonlar bor.
+
+```python
+# XATO — AttributeError: 'User' object has no attribute 'set_password'
+user.set_password(user.password_plain)
+
+# TO'G'RI
+from django.contrib.auth.hashers import make_password
+user.password = make_password(user.password_plain)
+user.save(update_fields=['password'])
+```
+
+Data migration'ni **haqiqiy ma'lumot bilan** sinab ko'r: bo'sh test bazasida `RunPython`
+hech qachon ishlamaydi (0 qator), shuning uchun xato faqat production'da chiqadi.
+
 ## Qat'iy taqiqlar
 
 - `config/settings.py` ning mavjud mantiqini o'zgartirish (faqat yangi sozlama qatorlari qo'shiladi).
