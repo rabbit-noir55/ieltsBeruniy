@@ -710,3 +710,36 @@ class CompetitionTests(APITestCase):
     def test_leaderboard_requires_auth(self):
         resp = APIClient().get(reverse('competition_leaderboard'))
         self.assertEqual(resp.status_code, 401)
+
+    def test_panel_control_toggles_check(self):
+        """Ustoz paneldan ham ptichka qo'ya oladi."""
+        self.client.force_login(self.teacher)
+        resp = self.client.post(reverse('panel:competition_control'), {
+            'student_id': self.student.id,
+            'skill': 'writing',
+        })
+        self.assertEqual(resp.status_code, 302)
+        self.assertTrue(
+            TaskCheck.objects.filter(
+                student=self.student, skill='writing', week=self.week
+            ).exists()
+        )
+
+        # Ikkinchi bosish — qaytaradi
+        self.client.post(reverse('panel:competition_control'), {
+            'student_id': self.student.id,
+            'skill': 'writing',
+        })
+        self.assertFalse(
+            TaskCheck.objects.filter(student=self.student, skill='writing').exists()
+        )
+
+    def test_panel_control_requires_teacher(self):
+        self.client.force_login(self.student)
+        resp = self.client.post(reverse('panel:competition_control'), {
+            'student_id': self.student.id,
+            'skill': 'writing',
+        })
+        # student -> login sahifasiga redirect
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(TaskCheck.objects.filter(student=self.student).exists())

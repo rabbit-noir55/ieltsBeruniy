@@ -11,21 +11,27 @@
   </div>
 
   {% if week %}
-  <div class="panel-card mb-6 p-4">
-    <div class="text-xs uppercase tracking-wider text-black/40 dark:text-white/40">Faol hafta</div>
-    <div class="mt-1 text-lg font-bold">{{ week.label }}</div>
-    <div class="text-sm text-black/50 dark:text-white/50">{{ week.start_date }} — {{ week.end_date }}</div>
+  <div class="panel-card mb-6 p-4 flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <div class="text-xs uppercase tracking-wider text-black/40 dark:text-white/40">Faol hafta</div>
+      <div class="mt-1 text-lg font-bold">{{ week.label }}</div>
+      <div class="text-sm text-black/50 dark:text-white/50">{{ week.start_date }} — {{ week.end_date }}</div>
+    </div>
+    <div class="text-xs text-black/40 dark:text-white/40">
+      Ptichkani bosib qo'shish / qaytarish mumkin
+    </div>
   </div>
 
-  <div class="panel-card p-0 overflow-hidden">
-    <table class="panel-table w-full">
+  <div class="panel-card p-0 overflow-x-auto">
+    <table class="panel-table w-full min-w-[640px]">
       <thead>
         <tr>
           <th>O'quvchi</th>
           <th>Guruh</th>
-          <th class="text-center">Bajarilgan</th>
+          {% for col in skill_cols %}
+            <th class="text-center w-14" title="{{ col.code }}">{{ col.short }}</th>
+          {% endfor %}
           <th class="text-center">Ball</th>
-          <th>Qolgan tasklar</th>
         </tr>
       </thead>
       <tbody>
@@ -33,18 +39,25 @@
         <tr>
           <td class="font-semibold">{{ r.student.full_name }}</td>
           <td class="text-black/50 dark:text-white/50">{{ r.student.group.name|default:'—' }}</td>
-          <td class="text-center">{{ r.done }} / 5</td>
-          <td class="text-center font-bold">{{ r.score }}</td>
-          <td>
-            {% for m in r.missing %}
-              <span class="rounded-full bg-red-500/10 px-2 py-0.5 text-xs text-red-600">{{ m }}</span>
-            {% empty %}
-              <span class="text-emerald-600 text-xs font-bold">To'liq ✓</span>
-            {% endfor %}
+          {% for m in r.marks %}
+          <td class="text-center">
+            <form method="post" class="inline">
+              {% csrf_token %}
+              <input type="hidden" name="student_id" value="{{ r.student.id }}">
+              <input type="hidden" name="skill" value="{{ m.skill }}">
+              <button type="submit"
+                class="inline-flex h-8 w-8 items-center justify-center rounded-lg border text-sm font-bold transition
+                {% if m.done %}border-emerald-500/40 bg-emerald-500/15 text-emerald-600{% else %}border-black/10 text-black/25 hover:bg-black/5 dark:border-white/10 dark:text-white/25 dark:hover:bg-white/5{% endif %}"
+                title="{{ m.skill }} — {% if m.done %}qaytarish{% else %}qo'yish{% endif %}">
+                {% if m.done %}✓{% else %}·{% endif %}
+              </button>
+            </form>
           </td>
+          {% endfor %}
+          <td class="text-center font-bold">{{ r.score }}<span class="text-xs font-normal text-black/30">/100</span></td>
         </tr>
         {% empty %}
-        <tr><td colspan="5" class="text-black/40">O'quvchi yo'q.</td></tr>
+        <tr><td colspan="9" class="text-black/40">O'quvchi yo'q.</td></tr>
         {% endfor %}
       </tbody>
     </table>

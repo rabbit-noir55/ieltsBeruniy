@@ -1147,8 +1147,39 @@ def competition_examiners(request):
 @login_required
 @user_passes_test(is_teacher, login_url='panel:login')
 def competition_control(request):
-    """Faol haftada kim qaysi taskni qo'ymagan."""
+    """Faol hafta: ptichkalarni ko'rish va qo'lda qo'yish/qaytarish."""
     from .models import TaskCheck, Week
+
+    week = Week.objects.filter(is_active=True).first()
+    skill_codes = [code for code, _label in TaskCheck.SKILL_CHOICES]
+    short_map = {
+        TaskCheck.SKILL_WRITING: 'W',
+        TaskCheck.SKILL_VOCABULARY: 'WR',
+        TaskCheck.SKILL_READING: 'RT',
+        TaskCheck.SKILL_SPEAKING: 'S',
+        TaskCheck.SKILL_RANDOM: 'R',
+    }
+
+    if request.method == 'POST' and week:
+        student = User.objects.filter(
+            pk=request.POST.get('student_id'), role=User.ROLE_STUDENT
+        ).first()
+        skill = (request.POST.get('skill') or '').strip()
+        if student and skill in skill_codes:
+            existing = TaskCheck.objects.filter(
+                student=student, week=week, skill=skill
+            ).first()
+            if existing:
+                existing.delete()
+            else:
+                TaskCheck.objects.create(
+                    student=student,
+                    week=week,
+                    skill=skill,
+                    checked_by=request.user,
+                    is_late=False,
+                )
+        return redirect('panel:competition_control')
 
     week = Week.objects.filter(is_active=True).first()
     rows = []
@@ -1163,19 +1194,23 @@ def competition_control(request):
         for c in checks:
             mark_map.setdefault(c.student_id, set()).add(c.skill)
 
-        skills = [s for s, _ in TaskCheck.SKILL_CHOICES]
         for s in students:
             done = mark_map.get(s.id, set())
-            missing = [k for k in skills if k not in done]
             rows.append({
                 'student': s,
+                'marks': [
+                    {'skill': k, 'short': short_map.get(k, k), 'done': k in done}
+                    for k in skill_codes
+                ],
                 'done': len(done),
-                'missing': missing,
                 'score': len(done) * TaskCheck.POINTS,
             })
 
     return render(request, 'panel/competition_control.html', {
         'week': week,
         'rows': rows,
-        'skills': [code for code, _label in TaskCheck.SKILL_CHOICES],
+        'skills': skill_codes,
+        'skill_cols': [
+            {'code': code, 'short': short_map.get(code, code)} for code in skill_codes
+        ],
     })
