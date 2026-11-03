@@ -1,0 +1,94 @@
+{% extends 'panel/base.html' %}
+{% block title %}Examinerlar{% endblock %}
+{% block body %}
+<div class="mx-auto max-w-5xl px-4 py-8">
+  <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <h1 class="font-display text-2xl font-bold">Examinerlar va bog'lanishlar</h1>
+    <div class="flex gap-2">
+      <a href="{% url 'panel:competition_weeks' %}" class="panel-btn panel-btn-ghost">Haftalar</a>
+      <a href="{% url 'panel:competition_control' %}" class="panel-btn panel-btn-ghost">Nazorat</a>
+    </div>
+  </div>
+
+  <div class="panel-card mb-6 p-5">
+    <h2 class="mb-3 text-sm font-bold uppercase tracking-wider text-black/50 dark:text-white/50">
+      Examiner qo'shish
+    </h2>
+    <form method="post" class="flex flex-wrap items-end gap-3">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add_examiner">
+      <div class="min-w-[260px]">
+        <label class="mb-1 block text-xs text-black/50 dark:text-white/50">O'quvchi</label>
+        <select name="user_id" class="panel-input w-full" required>
+          <option value="">Tanlang…</option>
+          {% for s in students %}
+          <option value="{{ s.id }}">{{ s.full_name }}{% if s.group %} — {{ s.group.name }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="panel-btn panel-btn-primary">Examiner qilish</button>
+    </form>
+  </div>
+
+  <div class="grid gap-4">
+    {% for ex in examiners %}
+    <div class="panel-card p-5">
+      <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div class="text-base font-bold">{{ ex.full_name }}</div>
+          <div class="text-xs text-black/40 dark:text-white/40">
+            {{ ex.assigned_students.all|length }} ta o'quvchi bog'langan
+          </div>
+        </div>
+        <form method="post" onsubmit="return confirm('Examinerlikdan chiqarilsinmi? Bog\'lanishlar ham o\'chadi.')">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="remove_examiner">
+          <input type="hidden" name="user_id" value="{{ ex.id }}">
+          <button class="panel-btn panel-btn-ghost text-xs py-1 px-3 text-red-600">Chiqarish</button>
+        </form>
+      </div>
+
+      <table class="panel-table w-full mb-3">
+        <tbody>
+          {% for link in ex.assigned_students.all %}
+          <tr>
+            <td>{{ link.student.full_name }}</td>
+            <td class="text-right">
+              <form method="post" class="inline">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="unlink">
+                <input type="hidden" name="link_id" value="{{ link.id }}">
+                <button class="panel-btn panel-btn-ghost text-xs py-1 px-3">Olib tashlash</button>
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td class="text-black/40">Hali o'quvchi bog'lanmagan.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <form method="post" class="flex flex-wrap items-end gap-3">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="link">
+        <input type="hidden" name="examiner_id" value="{{ ex.id }}">
+        <div class="min-w-[240px]">
+          <label class="mb-1 block text-xs text-black/50 dark:text-white/50">O'quvchi qo'shish</label>
+          <select name="student_id" class="panel-input w-full" required>
+            <option value="">Tanlang…</option>
+            {% for s in students %}
+            <option value="{{ s.id }}">{{ s.full_name }}{% if s.group %} — {{ s.group.name }}{% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit" class="panel-btn panel-btn-primary">Bog'lash</button>
+      </form>
+    </div>
+    {% empty %}
+    <div class="panel-card p-6 text-sm text-black/50 dark:text-white/50">
+      Hali examiner yo'q. Yuqoridagi formadan qo'shing.
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

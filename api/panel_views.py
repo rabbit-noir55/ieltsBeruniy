@@ -1048,3 +1048,134 @@ def attendance_schedule_alert(request):
     return render(request, 'panel/attendance_schedule_alert.html', {
         'groups': groups,
     })
+
+
+# ── Competition (English Learning League) ────────────────────────────────────
+
+
+def _parse_date(value):
+    try:
+        return _dt.strptime((value or '').strip(), '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return None
+
+
+@login_required
+@user_passes_test(is_teacher, login_url='panel:login')
+def competition_weeks(request):
+    """Haftalar: yaratish, faollashtirish, o'chirish."""
+    from .models import Week
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'create':
+            label = (request.POST.get('label') or '').strip()
+            start = _parse_date(request.POST.get('start_date'))
+            end = _parse_date(request.POST.get('end_date'))
+            if label and start and end and end >= start:
+                Week.objects.get_or_create(
+                    start_date=start,
+                    defaults={'label': label, 'end_date': end},
+                )
+        elif action == 'activate':
+            week = Week.objects.filter(pk=request.POST.get('week_id')).first()
+            if week:
+                week.is_active = True
+                week.save()
+        elif action == 'deactivate':
+            Week.objects.filter(pk=request.POST.get('week_id')).update(is_active=False)
+        elif action == 'delete':
+            Week.objects.filter(pk=request.POST.get('week_id')).delete()
+        return redirect('panel:competition_weeks')
+
+    return render(request, 'panel/competition_weeks.html', {
+        'weeks': Week.objects.all(),
+        'active_week': Week.objects.filter(is_active=True).first(),
+    })
+
+
+@login_required
+@user_passes_test(is_teacher, login_url='panel:login')
+def competition_examiners(request):
+    """Examiner biriktirish va bog'lanishlarni boshqarish."""
+    from .models import ExaminerLink
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'add_examiner':
+            user = User.objects.filter(
+                pk=request.POST.get('user_id'), role=User.ROLE_STUDENT
+            ).first()
+            if user:
+                user.is_examiner = True
+                user.save(update_fields=['is_examiner'])
+        elif action == 'remove_examiner':
+            user = User.objects.filter(pk=request.POST.get('user_id')).first()
+            if user:
+                ExaminerLink.objects.filter(examiner=user).delete()
+                user.is_examiner = False
+                user.save(update_fields=['is_examiner'])
+        elif action == 'link':
+            examiner = User.objects.filter(
+                pk=request.POST.get('examiner_id'), is_examiner=True
+            ).first()
+            student = User.objects.filter(
+                pk=request.POST.get('student_id'), role=User.ROLE_STUDENT
+            ).first()
+            if examiner and student and examiner.id != student.id:
+                ExaminerLink.objects.get_or_create(examiner=examiner, student=student)
+        elif action == 'unlink':
+            ExaminerLink.objects.filter(pk=request.POST.get('link_id')).delete()
+        return redirect('panel:competition_examiners')
+
+    examiners = (
+        User.objects.filter(is_examiner=True)
+        .prefetch_related('assigned_students__student')
+        .order_by('first_name', 'last_name')
+    )
+    students = (
+        User.objects.filter(role=User.ROLE_STUDENT)
+        .select_related('group')
+        .order_by('first_name', 'last_name')
+    )
+    return render(request, 'panel/competition_examiners.html', {
+        'examiners': examiners,
+        'students': students,
+    })
+
+
+@login_required
+@user_passes_test(is_teacher, login_url='panel:login')
+def competition_control(request):
+    """Faol haftada kim qaysi taskni qo'ymagan."""
+    from .models import TaskCheck, Week
+
+    week = Week.objects.filter(is_active=True).first()
+    rows = []
+    if week:
+        students = (
+            User.objects.filter(role=User.ROLE_STUDENT, group__isnull=False)
+            .select_related('group')
+            .order_by('first_name', 'last_name')
+        )
+        checks = TaskCheck.objects.filter(week=week)
+        mark_map = {}
+        for c in checks:
+            mark_map.setdefault(c.student_id, set()).add(c.skill)
+
+        skills = [s for s, _ in TaskCheck.SKILL_CHOICES]
+        for s in students:
+            done = mark_map.get(s.id, set())
+            missing = [k for k in skills if k not in done]
+            rows.append({
+                'student': s,
+                'done': len(done),
+                'missing': missing,
+                'score': len(done) * TaskCheck.POINTS,
+            })
+
+    return render(request, 'panel/competition_control.html', {
+        'week': week,
+        'rows': rows,
+        'skills': [code for code, _label in TaskCheck.SKILL_CHOICES],
+    })

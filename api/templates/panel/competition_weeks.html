@@ -1,0 +1,102 @@
+{% extends 'panel/base.html' %}
+{% block title %}League haftalari{% endblock %}
+{% block body %}
+<div class="mx-auto max-w-5xl px-4 py-8">
+  <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <h1 class="font-display text-2xl font-bold">League haftalari</h1>
+    <a href="{% url 'panel:competition_examiners' %}" class="panel-btn panel-btn-ghost">Examinerlar</a>
+  </div>
+
+  {% if active_week %}
+  <div class="panel-card mb-6 p-4">
+    <div class="text-xs uppercase tracking-wider text-black/40 dark:text-white/40">Faol hafta</div>
+    <div class="mt-1 text-lg font-bold">{{ active_week.label }}</div>
+    <div class="text-sm text-black/50 dark:text-white/50">
+      {{ active_week.start_date }} — {{ active_week.end_date }}
+    </div>
+  </div>
+  {% else %}
+  <div class="panel-card mb-6 p-4 text-sm text-amber-600">
+    Faol hafta yo'q. Examiner ptichka qo'ya olmaydi.
+  </div>
+  {% endif %}
+
+  <div class="panel-card mb-6 p-5">
+    <h2 class="mb-3 text-sm font-bold uppercase tracking-wider text-black/50 dark:text-white/50">
+      Yangi hafta
+    </h2>
+    <form method="post" class="flex flex-wrap items-end gap-3">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create">
+      <div>
+        <label class="mb-1 block text-xs text-black/50 dark:text-white/50">Nomi</label>
+        <input name="label" class="panel-input" placeholder="Oktabr 1-hafta" required>
+      </div>
+      <div>
+        <label class="mb-1 block text-xs text-black/50 dark:text-white/50">Boshlanish</label>
+        <input type="date" name="start_date" class="panel-input" required>
+      </div>
+      <div>
+        <label class="mb-1 block text-xs text-black/50 dark:text-white/50">Tugash</label>
+        <input type="date" name="end_date" class="panel-input" required>
+      </div>
+      <button type="submit" class="panel-btn panel-btn-primary">Qo'shish</button>
+    </form>
+  </div>
+
+  <div class="panel-card p-0 overflow-hidden">
+    <table class="panel-table w-full">
+      <thead>
+        <tr>
+          <th>Hafta</th>
+          <th>Boshlanish</th>
+          <th>Tugash</th>
+          <th>Holat</th>
+          <th>Amal</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for w in weeks %}
+        <tr>
+          <td class="font-semibold">{{ w.label }}</td>
+          <td>{{ w.start_date }}</td>
+          <td>{{ w.end_date }}</td>
+          <td>
+            {% if w.is_active %}
+              <span class="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-bold text-emerald-600">Faol</span>
+            {% else %}
+              <span class="rounded-full bg-black/5 px-2 py-0.5 text-xs text-black/40 dark:bg-white/10 dark:text-white/40">Yopiq</span>
+            {% endif %}
+          </td>
+          <td class="flex flex-wrap gap-2">
+            {% if not w.is_active %}
+            <form method="post" class="inline">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="activate">
+              <input type="hidden" name="week_id" value="{{ w.id }}">
+              <button class="panel-btn panel-btn-ghost text-xs py-1 px-3">Faollashtirish</button>
+            </form>
+            {% else %}
+            <form method="post" class="inline">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="deactivate">
+              <input type="hidden" name="week_id" value="{{ w.id }}">
+              <button class="panel-btn panel-btn-ghost text-xs py-1 px-3">Yopish</button>
+            </form>
+            {% endif %}
+            <form method="post" class="inline" onsubmit="return confirm('Hafta va uning barcha ptichkalari o\'chiriladi. Davom etasizmi?')">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="delete">
+              <input type="hidden" name="week_id" value="{{ w.id }}">
+              <button class="panel-btn panel-btn-ghost text-xs py-1 px-3 text-red-600">O'chirish</button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="text-black/40">Hafta yo'q.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

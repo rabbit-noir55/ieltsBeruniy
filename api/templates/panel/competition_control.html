@@ -1,0 +1,58 @@
+{% extends 'panel/base.html' %}
+{% block title %}League nazorati{% endblock %}
+{% block body %}
+<div class="mx-auto max-w-6xl px-4 py-8">
+  <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <h1 class="font-display text-2xl font-bold">Haftalik nazorat</h1>
+    <div class="flex gap-2">
+      <a href="{% url 'panel:competition_weeks' %}" class="panel-btn panel-btn-ghost">Haftalar</a>
+      <a href="{% url 'panel:competition_examiners' %}" class="panel-btn panel-btn-ghost">Examinerlar</a>
+    </div>
+  </div>
+
+  {% if week %}
+  <div class="panel-card mb-6 p-4">
+    <div class="text-xs uppercase tracking-wider text-black/40 dark:text-white/40">Faol hafta</div>
+    <div class="mt-1 text-lg font-bold">{{ week.label }}</div>
+    <div class="text-sm text-black/50 dark:text-white/50">{{ week.start_date }} — {{ week.end_date }}</div>
+  </div>
+
+  <div class="panel-card p-0 overflow-hidden">
+    <table class="panel-table w-full">
+      <thead>
+        <tr>
+          <th>O'quvchi</th>
+          <th>Guruh</th>
+          <th class="text-center">Bajarilgan</th>
+          <th class="text-center">Ball</th>
+          <th>Qolgan tasklar</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td class="font-semibold">{{ r.student.full_name }}</td>
+          <td class="text-black/50 dark:text-white/50">{{ r.student.group.name|default:'—' }}</td>
+          <td class="text-center">{{ r.done }} / 5</td>
+          <td class="text-center font-bold">{{ r.score }}</td>
+          <td>
+            {% for m in r.missing %}
+              <span class="rounded-full bg-red-500/10 px-2 py-0.5 text-xs text-red-600">{{ m }}</span>
+            {% empty %}
+              <span class="text-emerald-600 text-xs font-bold">To'liq ✓</span>
+            {% endfor %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="text-black/40">O'quvchi yo'q.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="panel-card p-6 text-sm text-amber-600">
+    Faol hafta yo'q — <a class="underline" href="{% url 'panel:competition_weeks' %}">hafta faollashtiring</a>.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

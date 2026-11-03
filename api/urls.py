@@ -2,7 +2,7 @@ from django.urls import include, path
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.routers import DefaultRouter
 
-from . import panel_views, telegram, views
+from . import competition, panel_views, telegram, views
 
 router = DefaultRouter()
 router.register('results', views.ResultViewSet, basename='result')
@@ -19,6 +19,13 @@ urlpatterns = [
     path('auth/me/', views.me, name='me'),
     path('auth/change-password/', views.change_password, name='change_password'),
     path('auth/reveal-password/', views.reveal_password, name='reveal_password'),
+
+    # Competition (English Learning League)
+    path('competition/leaderboard/', competition.leaderboard, name='competition_leaderboard'),
+    path('competition/my/', competition.my_progress, name='competition_my'),
+    path('competition/toggle/', competition.toggle_check, name='competition_toggle'),
+    path('competition/weeks/', competition.weeks, name='competition_weeks'),
+    path('competition/students/', competition.my_students, name='competition_students'),
     path('auth/google/', views.google_login, name='google_login'),
     path('typing/results/', views.typing_results, name='typing_results'),
     path('typing/leaderboard/', views.typing_leaderboard, name='typing_leaderboard'),
@@ -71,5 +78,8 @@ urlpatterns = [
         path('attendance/qr/', panel_views.attendance_qr, name='attendance_qr'),
         path('attendance/scan-log/', panel_views.attendance_scan_log, name='attendance_scan_log'),
         path('attendance/schedule-alert/', panel_views.attendance_schedule_alert, name='attendance_schedule_alert'),
+        path('competition/weeks/', panel_views.competition_weeks, name='competition_weeks'),
+        path('competition/examiners/', panel_views.competition_examiners, name='competition_examiners'),
+        path('competition/control/', panel_views.competition_control, name='competition_control'),
     ], 'panel'), namespace='panel')),
 ] + router.urls

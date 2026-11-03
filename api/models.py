@@ -69,6 +69,8 @@ class User(AbstractUser):
         UserGroup, on_delete=models.SET_NULL, null=True, blank=True, related_name='users'
     )
     is_blocked = models.BooleanField(default=False)
+    # Competition: ustoz ruxsat bergan o'quvchi boshqa 5 o'quvchiga ptichka qo'yadi.
+    is_examiner = models.BooleanField(default=False)
     password_plain = models.CharField(max_length=255, blank=True, default='')
     telegram_id = models.BigIntegerField(null=True, blank=True, unique=True, db_index=True)
     telegram_username = models.CharField(max_length=64, blank=True, default='')
@@ -433,3 +435,84 @@ class ScanEvent(models.Model):
 
     def __str__(self):
         return f'{self.student} — {self.date} — {self.code}'
+
+
+# ── Competition (English Learning League) ────────────────────────────────────
+
+
+class Week(models.Model):
+    """League haftasi. Bir vaqtda faqat bittasi faol bo'ladi."""
+
+    label = models.CharField(max_length=100)
+    start_date = models.DateField(unique=True)
+    end_date = models.DateField()
+    is_active = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-start_date']
+
+    def __str__(self):
+        return self.label
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.is_active:
+            Week.objects.exclude(pk=self.pk).filter(is_active=True).update(is_active=False)
+
+
+class ExaminerLink(models.Model):
+    """Ustoz belgilaydigan bog'lanish: examiner -> o'quvchi."""
+
+    examiner = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='assigned_students'
+    )
+    student = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='examiner_links'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('examiner', 'student')]
+        ordering = ['examiner_id', 'student__first_name']
+
+    def __str__(self):
+        return f'{self.examiner} → {self.student}'
+
+
+class TaskCheck(models.Model):
+    """Haftalik task ptichkasi. Ptichka bor = task bajarilgan (20 ball)."""
+
+    SKILL_WRITING = 'writing'
+    SKILL_VOCABULARY = 'vocabulary'
+    SKILL_READING = 'reading'
+    SKILL_SPEAKING = 'speaking'
+    SKILL_RANDOM = 'random'
+    SKILL_CHOICES = [
+        (SKILL_WRITING, 'Writing'),
+        (SKILL_VOCABULARY, 'Vocabulary'),
+        (SKILL_READING, 'Reading'),
+        (SKILL_SPEAKING, 'Speaking'),
+        (SKILL_RANDOM, 'Random speaking'),
+    ]
+    POINTS = 20
+
+    student = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='task_checks'
+    )
+    week = models.ForeignKey(Week, on_delete=models.CASCADE, related_name='checks')
+    skill = models.CharField(max_length=20, choices=SKILL_CHOICES)
+    checked_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='given_checks',
+    )
+    checked_at = models.DateTimeField(auto_now_add=True)
+    # Kech qo'yilgani uchun ball hisoblanmaydi, lekin tarixda ko'rinadi.
+    is_late = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = [('student', 'week', 'skill')]
+        ordering = ['student_id', 'week_id', 'skill']
+
+    def __str__(self):
+        return f'{self.student} — {self.week} — {self.skill}'

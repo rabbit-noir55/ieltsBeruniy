@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
@@ -11,7 +11,10 @@ from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient, APITestCase
 
 from .attendance import distance_m, is_lesson_day
-from .models import Attendance, DayOff, ScanEvent, TestResult, User, UserGroup
+from .models import (
+    Attendance, DayOff, ExaminerLink, ScanEvent, TaskCheck, TestResult, User,
+    UserGroup, Week,
+)
 
 
 def authed_client(token):
@@ -581,3 +584,129 @@ class AttendanceMyAndManualTests(APITestCase):
         self.assertTrue(Attendance.objects.filter(
             student=self.student, date=date(2026, 11, 1), source=Attendance.SOURCE_MANUAL
         ).exists())
+
+
+class CompetitionTests(APITestCase):
+    """League: ptichka -> 20 ball, late -> 0 ball."""
+
+    def setUp(self):
+        self.group = UserGroup.objects.create(name='IELTS-League', slug='ielts-league')
+        self.teacher = create_test_user('league_teacher@test.com', role=User.ROLE_TEACHER)
+        self.examiner = create_test_user(
+            'league_examiner@test.com', role=User.ROLE_STUDENT, group=self.group
+        )
+        self.examiner.is_examiner = True
+        self.examiner.save(update_fields=['is_examiner'])
+        self.student = create_test_user(
+            'league_student@test.com', role=User.ROLE_STUDENT, group=self.group
+        )
+        self.other = create_test_user(
+            'league_other@test.com', role=User.ROLE_STUDENT, group=self.group
+        )
+        ExaminerLink.objects.create(examiner=self.examiner, student=self.student)
+
+        today = date.today()
+        self.week = Week.objects.create(
+            label='Joriy hafta',
+            start_date=today - timedelta(days=3),
+            end_date=today + timedelta(days=3),
+            is_active=True,
+        )
+        self.old_week = Week.objects.create(
+            label="O'tgan hafta",
+            start_date=today - timedelta(days=14),
+            end_date=today - timedelta(days=7),
+            is_active=False,
+        )
+
+    def _client(self, user):
+        token, _ = Token.objects.get_or_create(user=user)
+        return authed_client(token)
+
+    def test_only_one_active_week(self):
+        self.old_week.is_active = True
+        self.old_week.save()
+        self.week.refresh_from_db()
+        self.old_week.refresh_from_db()
+        self.assertTrue(self.old_week.is_active)
+        self.assertFalse(self.week.is_active)
+
+    def test_examiner_can_toggle_linked_student(self):
+        client = self._client(self.examiner)
+        resp = client.post(reverse('competition_toggle'), {
+            'student': self.student.id, 'skill': 'writing',
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['checked'])
+        self.assertFalse(resp.data['is_late'])
+
+    def test_examiner_cannot_toggle_other_student(self):
+        client = self._client(self.examiner)
+        resp = client.post(reverse('competition_toggle'), {
+            'student': self.other.id, 'skill': 'writing',
+        })
+        self.assertEqual(resp.status_code, 403)
+
+    def test_teacher_can_toggle_any_student(self):
+        client = self._client(self.teacher)
+        resp = client.post(reverse('competition_toggle'), {
+            'student': self.other.id, 'skill': 'speaking',
+        })
+        self.assertEqual(resp.status_code, 200)
+
+    def test_toggle_undo(self):
+        client = self._client(self.examiner)
+        client.post(reverse('competition_toggle'), {
+            'student': self.student.id, 'skill': 'reading',
+        })
+        self.assertTrue(TaskCheck.objects.filter(student=self.student).exists())
+        resp = client.post(reverse('competition_toggle'), {
+            'student': self.student.id, 'skill': 'reading',
+        })
+        self.assertFalse(resp.data['checked'])
+        self.assertFalse(TaskCheck.objects.filter(student=self.student).exists())
+
+    def test_leaderboard_score_counts_only_on_time(self):
+        # 2 ta oddiy + 1 ta late
+        TaskCheck.objects.create(
+            student=self.student, week=self.week, skill='writing', is_late=False
+        )
+        TaskCheck.objects.create(
+            student=self.student, week=self.week, skill='reading', is_late=False
+        )
+        TaskCheck.objects.create(
+            student=self.student, week=self.week, skill='speaking', is_late=True
+        )
+        client = self._client(self.student)
+        resp = client.get(reverse('competition_leaderboard'))
+        self.assertEqual(resp.status_code, 200)
+        row = next(r for r in resp.data['rows'] if r['student_id'] == self.student.id)
+        self.assertEqual(row['score'], 40)          # 2 × 20
+        self.assertEqual(row['late_count'], 1)
+        self.assertEqual(row['checks']['speaking'], 'late')
+        self.assertEqual(row['checks']['writing'], 'done')
+        self.assertIsNone(row['checks']['vocabulary'])
+
+    def test_closed_week_marks_late(self):
+        client = self._client(self.examiner)
+        resp = client.post(reverse('competition_toggle'), {
+            'student': self.student.id, 'skill': 'vocabulary',
+            'week': self.old_week.id,
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['is_late'])
+
+    def test_my_progress_totals(self):
+        TaskCheck.objects.create(
+            student=self.student, week=self.week, skill='writing', is_late=False
+        )
+        TaskCheck.objects.create(
+            student=self.student, week=self.old_week, skill='writing', is_late=False
+        )
+        client = self._client(self.student)
+        resp = client.get(reverse('competition_my'))
+        self.assertEqual(resp.data['total'], 40)
+
+    def test_leaderboard_requires_auth(self):
+        resp = APIClient().get(reverse('competition_leaderboard'))
+        self.assertEqual(resp.status_code, 401)
