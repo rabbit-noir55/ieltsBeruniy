@@ -932,3 +932,52 @@ class CompetitionTests(APITestCase):
         )
         with self.assertRaises(IntegrityError):
             ExaminerLink.objects.create(examiner=examiner2, student=self.student)
+
+
+class PurgeNonGmailUsersTests(APITestCase):
+    """Test foydalanuvchilarni tozalash buyrug'i."""
+
+    def _run(self, *args):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command('purge_non_gmail_users', *args, stdout=out)
+        return out.getvalue()
+
+    def test_dry_run_does_not_delete(self):
+        user = create_test_user('test@local.test', role=User.ROLE_STUDENT)
+        output = self._run()
+        self.assertIn('DRY RUN', output)
+        self.assertTrue(User.objects.filter(pk=user.pk).exists())
+
+    def test_apply_deletes_only_test_students(self):
+        gmail_user = create_test_user('real@gmail.com', role=User.ROLE_STUDENT)
+        local_user = create_test_user('test@local.test', role=User.ROLE_STUDENT)
+        teacher = create_test_user('teacher@admin.local', role=User.ROLE_TEACHER)
+        staff = create_test_user('staff@test.com', role=User.ROLE_STUDENT)
+        staff.is_staff = True
+        staff.save(update_fields=['is_staff'])
+
+        output = self._run('--apply')
+        self.assertIn("O'chirildi", output)
+        self.assertFalse(User.objects.filter(pk=local_user.pk).exists())
+        self.assertTrue(User.objects.filter(pk=gmail_user.pk).exists())
+        self.assertTrue(User.objects.filter(pk=teacher.pk).exists())
+        self.assertTrue(User.objects.filter(pk=staff.pk).exists())
+
+    def test_apply_cascades_related_results(self):
+        student = create_test_user('cascade@local.test', role=User.ROLE_STUDENT)
+        TestResult.objects.create(
+            student=student, skill='listening', series_id=1, test_num=1,
+            part_num=1, band=6.0,
+        )
+        self._run('--apply')
+        self.assertFalse(User.objects.filter(pk=student.pk).exists())
+        self.assertFalse(TestResult.objects.filter(student_id=student.pk).exists())
+
+    def test_all_flag_deletes_teachers_too(self):
+        teacher = create_test_user('legacy@admin.local', role=User.ROLE_TEACHER)
+        self._run('--apply', '--all')
+        self.assertFalse(User.objects.filter(pk=teacher.pk).exists())
