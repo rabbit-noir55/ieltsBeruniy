@@ -365,11 +365,43 @@ def league(request):
             Week.objects.filter(pk=request.data.get('week')).delete()
             return Response({'ok': True})
 
-        if action == 'link_add':
-            examiner = get_object_or_404(User, pk=request.data.get('examiner'))
-            student = get_object_or_404(User, pk=request.data.get('student'))
-            ExaminerLink.objects.get_or_create(examiner=examiner, student=student)
-            return Response({'ok': True})
+        if action in ('link_add', 'link_toggle'):
+            examiner = get_object_or_404(
+                User, pk=request.data.get('examiner'), is_examiner=True
+            )
+            student = get_object_or_404(
+                User, pk=request.data.get('student'), role=User.ROLE_STUDENT
+            )
+            if examiner.pk == student.pk:
+                return Response(
+                    {'detail': "Examinerni o'ziga bog'lab bo'lmaydi."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not examiner.group_id:
+                return Response(
+                    {'detail': "Avval examinerni guruhga biriktiring."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if student.group_id != examiner.group_id:
+                return Response(
+                    {'detail': "Faqat bir xil guruhdagi o'quvchilarni bog'lash mumkin."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            existing = ExaminerLink.objects.filter(
+                examiner=examiner, student=student
+            ).first()
+            if action == 'link_toggle' and existing:
+                existing.delete()
+                return Response({'ok': True, 'linked': False, 'link_id': None})
+
+            if existing:
+                return Response(
+                    {'ok': True, 'linked': True, 'link_id': existing.id}
+                )
+
+            link = ExaminerLink.objects.create(examiner=examiner, student=student)
+            return Response({'ok': True, 'linked': True, 'link_id': link.id})
 
         if action == 'link_remove':
             ExaminerLink.objects.filter(pk=request.data.get('link')).delete()
@@ -383,9 +415,52 @@ def league(request):
     weeks = Week.objects.all()
     examiners = (
         User.objects.filter(is_examiner=True)
+        .select_related('group')
         .prefetch_related('assigned_students__student')
-        .order_by('first_name')
+        .order_by('first_name', 'last_name')
     )
+
+    # Bir xil guruhdagi o'quvchilar — examiner faqat guruhdoshlarini tanlay oladi.
+    students_by_group = {}
+    group_students = (
+        User.objects.filter(role=User.ROLE_STUDENT, group__isnull=False)
+        .select_related('group')
+        .order_by('first_name', 'last_name')
+    )
+    for s in group_students:
+        students_by_group.setdefault(s.group_id, []).append(s)
+
+    out = []
+    for e in examiners:
+        links = {l.student_id: l for l in e.assigned_students.all()}
+        classmates = [
+            s for s in students_by_group.get(e.group_id, []) if s.pk != e.pk
+        ] if e.group_id else []
+        # Faqat guruhdosh bog'lanishlarni ko'rsatamiz (eski begona guruhlar e'tiborsiz).
+        valid_links = [
+            l for l in e.assigned_students.all()
+            if e.group_id and l.student.group_id == e.group_id
+        ]
+        out.append({
+            'id': e.id,
+            'name': e.full_name,
+            'group': e.group.name if e.group else '',
+            'group_id': e.group_id,
+            'students': [
+                {'link_id': l.id, 'id': l.student_id, 'name': l.student.full_name}
+                for l in valid_links
+            ],
+            'candidates': [
+                {
+                    'id': s.id,
+                    'name': s.full_name,
+                    'linked': s.id in links,
+                    'link_id': links[s.id].id if s.id in links else None,
+                }
+                for s in classmates
+            ],
+        })
+
     return Response({
         'weeks': [
             {
@@ -397,17 +472,7 @@ def league(request):
             }
             for w in weeks
         ],
-        'examiners': [
-            {
-                'id': e.id,
-                'name': e.full_name,
-                'students': [
-                    {'link_id': l.id, 'id': l.student_id, 'name': l.student.full_name}
-                    for l in e.assigned_students.all()
-                ],
-            }
-            for e in examiners
-        ],
+        'examiners': out,
     })
 
 

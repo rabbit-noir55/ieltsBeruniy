@@ -789,3 +789,89 @@ class CompetitionTests(APITestCase):
         # student -> login sahifasiga redirect
         self.assertEqual(resp.status_code, 302)
         self.assertFalse(TaskCheck.objects.filter(student=self.student).exists())
+
+    def test_admin_league_candidates_only_groupmates(self):
+        other_group = UserGroup.objects.create(name='Boshqa guruh', slug='boshqa-guruh')
+        outsider = create_test_user(
+            'outsider@test.com', role=User.ROLE_STUDENT, group=other_group
+        )
+        client = self._client(self.teacher)
+        resp = client.get(reverse('admin_league'))
+        self.assertEqual(resp.status_code, 200)
+        examiner = next(
+            e for e in resp.data['examiners'] if e['id'] == self.examiner.id
+        )
+        ids = {c['id'] for c in examiner['candidates']}
+        self.assertIn(self.other.id, ids)
+        self.assertIn(self.student.id, ids)
+        self.assertNotIn(outsider.id, ids)
+        self.assertNotIn(self.examiner.id, ids)
+
+    def test_admin_league_toggle_link_same_group(self):
+        client = self._client(self.teacher)
+        url = reverse('admin_league')
+
+        resp = client.post(url, {
+            'action': 'link_toggle',
+            'examiner': self.examiner.id,
+            'student': self.other.id,
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['linked'])
+        self.assertTrue(ExaminerLink.objects.filter(
+            examiner=self.examiner, student=self.other
+        ).exists())
+
+        resp = client.post(url, {
+            'action': 'link_toggle',
+            'examiner': self.examiner.id,
+            'student': self.other.id,
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.data['linked'])
+        self.assertFalse(ExaminerLink.objects.filter(
+            examiner=self.examiner, student=self.other
+        ).exists())
+
+    def test_admin_league_cannot_link_other_group(self):
+        other_group = UserGroup.objects.create(name='Boshqa 2', slug='boshqa-2')
+        outsider = create_test_user(
+            'outsider2@test.com', role=User.ROLE_STUDENT, group=other_group
+        )
+        client = self._client(self.teacher)
+        resp = client.post(reverse('admin_league'), {
+            'action': 'link_toggle',
+            'examiner': self.examiner.id,
+            'student': outsider.id,
+        })
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(ExaminerLink.objects.filter(
+            examiner=self.examiner, student=outsider
+        ).exists())
+
+    def test_admin_league_examiner_without_group_cannot_link(self):
+        loner = create_test_user('loner@test.com', role=User.ROLE_STUDENT)
+        loner.is_examiner = True
+        loner.save(update_fields=['is_examiner'])
+        client = self._client(self.teacher)
+        resp = client.post(reverse('admin_league'), {
+            'action': 'link_toggle',
+            'examiner': loner.id,
+            'student': self.student.id,
+        })
+        self.assertEqual(resp.status_code, 400)
+
+    def test_examiner_cannot_toggle_linked_student_from_other_group(self):
+        other_group = UserGroup.objects.create(name='Boshqa 3', slug='boshqa-3')
+        outsider = create_test_user(
+            'outsider3@test.com', role=User.ROLE_STUDENT, group=other_group
+        )
+        ExaminerLink.objects.create(examiner=self.examiner, student=outsider)
+        client = self._client(self.examiner)
+        resp = client.post(reverse('competition_toggle'), {
+            'student': outsider.id, 'skill': 'writing',
+        })
+        self.assertEqual(resp.status_code, 403)
+        self.assertFalse(TaskCheck.objects.filter(
+            student=outsider, skill='writing'
+        ).exists())

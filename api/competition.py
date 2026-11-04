@@ -51,7 +51,15 @@ def _can_edit(user, student_id):
         return True
     if not getattr(user, 'is_examiner', False):
         return False
-    return ExaminerLink.objects.filter(examiner=user, student_id=student_id).exists()
+    link = (
+        ExaminerLink.objects.filter(examiner=user, student_id=student_id)
+        .select_related('student')
+        .first()
+    )
+    if not link:
+        return False
+    # Faqat guruhdoshlar bir-biriga ptichka qo'ya oladi.
+    return bool(user.group_id) and link.student.group_id == user.group_id
 
 
 @api_view(['GET'])
