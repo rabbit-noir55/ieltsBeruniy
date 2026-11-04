@@ -4,7 +4,6 @@ Model: har hafta 5 ta task. Ptichka bor = 20 ball. Kech qo'yilgan ptichka
 (`is_late`) ko'rinadi, lekin ball hisoblanmaydi.
 """
 
-from datetime import date
 
 from django.db import IntegrityError
 from django.shortcuts import get_object_or_404

@@ -2,7 +2,7 @@
 
 import re
 
-from .game_ai import MAX_GAME_BYTES, parse_game_meta  # meta formati bir xil
+from .game_ai import MAX_GAME_BYTES  # meta formati bir xil
 
 STATE_RE = re.compile(r"og:state:(get|set|all)", re.IGNORECASE)
 

@@ -18,19 +18,6 @@ TOTAL_QUESTIONS = 40
 MAX_PARTS = {"listening": 4, "reading": 3}
 SKILLS = ("listening", "reading")
 
-# Frontend tushunadigan kanonik turlar
-CANONICAL_TYPES = {
-    "input",
-    "single_choice",
-    "multiple_choice",
-    "true_false_not_given",
-    "yes_no_not_given",
-    "matching",
-    "summary",
-    "select",
-    "table",
-}
-
 TYPE_ALIASES = {
     # input / completion
     "input": "input",
@@ -439,13 +426,3 @@ def _short(items, limit=10):
     if len(items) <= limit:
         return ", ".join(str(i) for i in items)
     return ", ".join(str(i) for i in items[:limit]) + f" ... (+{len(items) - limit})"
-
-
-def error_prompt(result):
-    """AI ga qaytariladigan tuzatish ro'yxati."""
-    lines = []
-    for err in result["errors"]:
-        lines.append(f"- {err}")
-    for warn in result["warnings"]:
-        lines.append(f"- (ogohlantirish) {warn}")
-    return "\n".join(lines)

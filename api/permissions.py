@@ -1,4 +1,4 @@
-from rest_framework import exceptions, permissions, status
+from rest_framework import exceptions, status
 from rest_framework.authentication import TokenAuthentication
 
 
@@ -21,14 +21,3 @@ class BlockAwareTokenAuthentication(TokenAuthentication):
             raise BlockedAuthenticationFailed(BLOCKED_MESSAGE)
         return user, token
 
-
-class IsNotBlocked(permissions.BasePermission):
-    """Bloklangan o'quvchining barcha API'ga kirishini taqiqlaydi."""
-
-    message = BLOCKED_MESSAGE
-
-    def has_permission(self, request, view):
-        user = request.user
-        if user is None or not user.is_authenticated:
-            return True
-        return not getattr(user, 'is_blocked', False)

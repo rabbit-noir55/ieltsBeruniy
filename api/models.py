@@ -50,9 +50,6 @@ class UserGroup(models.Model):
     def logo_initial(self):
         return (self.name or '?').strip()[:1].upper()
 
-    def get_param(self, key, default=None):
-        return self.parameters.get(key, default)
-
 
 class User(AbstractUser):
     ROLE_STUDENT = 'student'
@@ -271,10 +268,6 @@ class Game(models.Model):
 
     def __str__(self):
         return self.title
-
-    @property
-    def play_count(self):
-        return self.scores.count()
 
 
 class GameResult(models.Model):

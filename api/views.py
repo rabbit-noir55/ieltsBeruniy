@@ -5,7 +5,6 @@ from datetime import timedelta, timezone as dt_timezone
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth import authenticate
-from django.core.cache import cache
 from django.db import IntegrityError
 from django.db.models import Avg, Count, Max, Q
 from django.http import JsonResponse
@@ -13,7 +12,6 @@ from django.utils import timezone
 from rest_framework import permissions, status, viewsets
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
 import requests as http_requests
@@ -123,10 +121,8 @@ def google_login(request):
             status=status.HTTP_401_UNAUTHORIZED,
         )
 
-    google_sub = google_data.get('sub')
     given_name = google_data.get('given_name', '')
     family_name = google_data.get('family_name', '')
-    picture = google_data.get('picture', '')
 
     teacher_emails = {e.lower() for e in getattr(settings, 'TEACHER_EMAILS', [])}
     is_teacher_email = email in teacher_emails

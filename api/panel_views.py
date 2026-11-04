@@ -593,17 +593,6 @@ from .game_spec import ENVIRONMENT_SPEC
 from .models import Game, GameResult
 
 
-def _game_config_from_post(post):
-    def _num(key, default):
-        raw = post.get(key)
-        try:
-            return int(raw)
-        except (TypeError, ValueError):
-            return default
-
-    return {'time_limit': _num('time_limit', 90)}
-
-
 @login_required
 @user_passes_test(is_teacher, login_url='panel:login')
 def game_list(request):
@@ -729,7 +718,7 @@ def game_results(request, game_id):
 # ─────────────────────────────────────────────────────────────────────────────
 #  Tools (ustoz qo'shadi) — sandbox HTML, bazada xotira
 # ─────────────────────────────────────────────────────────────────────────────
-from .models import Tool, ToolState  # noqa: E402
+from .models import Tool  # noqa: E402
 from .tool_ai import validate_tool_html  # noqa: E402
 from .tool_spec import TOOL_ENVIRONMENT_SPEC  # noqa: E402
 
@@ -845,7 +834,6 @@ import csv as _csv
 import io as _io
 
 import qrcode
-from django.conf import settings as _settings
 from django.http import HttpResponse
 
 

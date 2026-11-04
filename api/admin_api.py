@@ -4,7 +4,6 @@ Barcha endpointlar faqat `role == teacher` uchun ochiq.
 """
 
 import json
-from datetime import date
 
 from django.db.models import Count, Max, Q
 from django.shortcuts import get_object_or_404
