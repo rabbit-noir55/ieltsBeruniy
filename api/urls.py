@@ -2,7 +2,7 @@ from django.urls import include, path
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.routers import DefaultRouter
 
-from . import competition, panel_views, telegram, views
+from . import admin_api, competition, panel_views, telegram, views
 
 router = DefaultRouter()
 router.register('results', views.ResultViewSet, basename='result')
@@ -19,6 +19,25 @@ urlpatterns = [
     path('auth/me/', views.me, name='me'),
     path('auth/change-password/', views.change_password, name='change_password'),
     path('auth/reveal-password/', views.reveal_password, name='reveal_password'),
+
+    # Admin API (React panel)
+    path('admin/summary/', admin_api.summary, name='admin_summary'),
+    path('admin/students/', admin_api.students, name='admin_students'),
+    path('admin/students/<int:student_id>/detail/', admin_api.student_detail, name='admin_student_detail'),
+    path('admin/students/<int:student_id>/action/', admin_api.student_action, name='admin_student_action'),
+    path('admin/groups/', admin_api.groups, name='admin_groups'),
+    path('admin/groups/<int:group_id>/delete/', admin_api.group_delete, name='admin_group_delete'),
+    path('admin/attendance/today/', admin_api.attendance_today, name='admin_attendance_today'),
+    path('admin/attendance/mark/', admin_api.attendance_mark, name='admin_attendance_mark'),
+    path('admin/attendance/monthly/', admin_api.attendance_monthly, name='admin_attendance_monthly'),
+    path('admin/attendance/day-off/', admin_api.attendance_day_off, name='admin_attendance_day_off'),
+    path('admin/league/', admin_api.league, name='admin_league'),
+    path('admin/mocks/', admin_api.mocks, name='admin_mocks'),
+    path('admin/mocks/<int:mock_id>/', admin_api.mock_detail, name='admin_mock_detail'),
+    path('admin/games/', admin_api.games, name='admin_games'),
+    path('admin/games/<int:game_id>/results/', admin_api.game_results, name='admin_game_results'),
+    path('admin/tools/', admin_api.tools, name='admin_tools'),
+    path('admin/tools/<int:tool_id>/', admin_api.tool_detail, name='admin_tool_detail'),
 
     # Competition (English Learning League)
     path('competition/leaderboard/', competition.leaderboard, name='competition_leaderboard'),
