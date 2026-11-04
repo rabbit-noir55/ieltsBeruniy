@@ -114,16 +114,31 @@ def google_login(request):
     email = google_data.get('email')
     if not email:
         return Response({'detail': 'Google hisobidan email olinmadi.'}, status=status.HTTP_400_BAD_REQUEST)
+    email = email.strip().lower()
+
+    verified = google_data.get('email_verified')
+    if verified is not None and str(verified).lower() != 'true':
+        return Response(
+            {'detail': 'Google email tasdiqlanmagan.'},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
 
     google_sub = google_data.get('sub')
     given_name = google_data.get('given_name', '')
     family_name = google_data.get('family_name', '')
     picture = google_data.get('picture', '')
 
+    teacher_emails = {e.lower() for e in getattr(settings, 'TEACHER_EMAILS', [])}
+    is_teacher_email = email in teacher_emails
+
     # Email bo'yicha user topish
-    user = User.objects.filter(email=email).first()
+    user = User.objects.filter(email__iexact=email).first()
 
     if user:
+        # Ustoz allowlist'idagi email bo'lsa — rolni ustozga ko'taramiz.
+        if is_teacher_email and user.role != User.ROLE_TEACHER:
+            user.role = User.ROLE_TEACHER
+            user.save(update_fields=['role'])
         # Mavjud user — token qaytar
         token, _ = Token.objects.get_or_create(user=user)
         return Response({'token': token.key, 'user': UserSerializer(user).data})
@@ -135,7 +150,7 @@ def google_login(request):
         email=email,
         first_name=given_name,
         last_name=family_name,
-        role=User.ROLE_STUDENT,
+        role=User.ROLE_TEACHER if is_teacher_email else User.ROLE_STUDENT,
         password_plain=random_password,
     )
     user.set_password(random_password)

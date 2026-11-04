@@ -285,4 +285,13 @@ CENTER_LNG = float(os.environ.get('CENTER_LNG', '69.2405'))
 CENTER_RADIUS_M = int(os.environ.get('CENTER_RADIUS_M', '150'))
 MAX_GPS_ACCURACY_M = int(os.environ.get('MAX_GPS_ACCURACY_M', '300'))
 ATTENDANCE_CODE = os.environ.get('ATTENDANCE_CODE', 'ENTHUS8X')
+
+# Google orqali kirganda avtomatik ustoz bo'ladigan emaillar (vergul bilan).
+TEACHER_EMAILS = [
+    e.strip().lower()
+    for e in os.environ.get(
+        'TEACHER_EMAILS', 'rabbit.noir2009@gmail.com'
+    ).split(',')
+    if e.strip()
+]
 ATTENDANCE_WINDOW_MIN = int(os.environ.get('ATTENDANCE_WINDOW_MIN', '15'))

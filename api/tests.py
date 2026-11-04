@@ -162,6 +162,10 @@ class DailyLimitTests(APITestCase):
 class AuthTests(APITestCase):
     """Register/login/me — oddiy auth oqimi."""
 
+    def setUp(self):
+        # Throttle hisoblagichi testlar orasida qolib ketmasin.
+        cache.clear()
+
     def test_register_returns_token_and_creates_student(self):
         resp = self.client.post(reverse('register'), {
             'email': 'newbie@test.com',
@@ -247,6 +251,48 @@ class AuthTests(APITestCase):
         )
         self.assertIsNotNone(auth_user)
         self.assertEqual(auth_user.pk, user.pk)
+
+    @patch('api.views.http_requests.get')
+    @override_settings(TEACHER_EMAILS=['ustoz@gmail.com'])
+    def test_google_login_teacher_email_creates_teacher(self, mock_get):
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {
+            'email': 'ustoz@gmail.com',
+            'email_verified': 'true',
+            'given_name': 'Ustoz',
+            'family_name': 'Test',
+        }
+        resp = self.client.post(reverse('google_login'), {'credential': 'fake-token'})
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data['user']['role'], User.ROLE_TEACHER)
+        self.assertEqual(User.objects.get(email='ustoz@gmail.com').role, User.ROLE_TEACHER)
+
+    @patch('api.views.http_requests.get')
+    @override_settings(TEACHER_EMAILS=['ustoz@gmail.com'])
+    def test_google_login_promotes_existing_student_to_teacher(self, mock_get):
+        user = create_test_user('ustoz@gmail.com', role=User.ROLE_STUDENT)
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {
+            'email': 'ustoz@gmail.com',
+            'email_verified': 'true',
+            'given_name': 'Ustoz',
+            'family_name': 'Test',
+        }
+        resp = self.client.post(reverse('google_login'), {'credential': 'fake-token'})
+        self.assertEqual(resp.status_code, 200)
+        user.refresh_from_db()
+        self.assertEqual(user.role, User.ROLE_TEACHER)
+
+    @patch('api.views.http_requests.get')
+    @override_settings(TEACHER_EMAILS=['ustoz@gmail.com'])
+    def test_google_login_unverified_email_rejected(self, mock_get):
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {
+            'email': 'ustoz@gmail.com',
+            'email_verified': 'false',
+        }
+        resp = self.client.post(reverse('google_login'), {'credential': 'fake-token'})
+        self.assertEqual(resp.status_code, 401)
 
     @patch('api.views.http_requests.get')
     def test_reveal_password_wrong_google_email_returns_403(self, mock_get):
