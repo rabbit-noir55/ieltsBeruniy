@@ -1037,3 +1037,148 @@ def student_detail(request, student_id):
             for r in recent
         ],
     })
+
+
+# ── Davomat: skan jurnali va QR ──────────────────────────────────────────────
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+@teacher_only
+def attendance_scan_log(request):
+    from .models import ScanEvent
+
+    date_str = (request.query_params.get('date') or '').strip()
+    scans = ScanEvent.objects.select_related('student', 'group').order_by('-created_at')
+    if date_str:
+        scans = scans.filter(date=date_str)
+
+    return Response({
+        'date': date_str,
+        'scans': [
+            {
+                'id': s.id,
+                'student': s.student.full_name if s.student else '—',
+                'group': s.group.name if s.group else '',
+                'date': str(s.date),
+                'code': s.code,
+                'error': s.error_code,
+                'distance_m': None if s.distance_m is None else round(s.distance_m, 1),
+                'created_at': s.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            }
+            for s in scans[:200]
+        ],
+    })
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+@teacher_only
+def attendance_qr(request):
+    import base64
+    import io
+
+    import qrcode
+    from django.conf import settings as django_settings
+
+    code = getattr(django_settings, 'ATTENDANCE_CODE', '')
+    buffer = io.BytesIO()
+    qrcode.make(code).save(buffer, format='PNG')
+    qr = base64.b64encode(buffer.getvalue()).decode()
+    return Response({
+        'code': code,
+        'qr_data_url': f'data:image/png;base64,{qr}',
+    })
+
+
+# ── Liga: faol hafta ptichkalari ─────────────────────────────────────────────
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.IsAuthenticated])
+@teacher_only
+def league_checks(request):
+    week = Week.objects.filter(is_active=True).first()
+    skills = [
+        {
+            'code': code,
+            'label': label,
+            'short': {
+                TaskCheck.SKILL_WRITING: 'W',
+                TaskCheck.SKILL_VOCABULARY: 'WR',
+                TaskCheck.SKILL_READING: 'RT',
+                TaskCheck.SKILL_SPEAKING: 'S',
+                TaskCheck.SKILL_RANDOM: 'R',
+            }.get(code, code),
+        }
+        for code, label in TaskCheck.SKILL_CHOICES
+    ]
+
+    if request.method == 'POST':
+        if not week:
+            return Response(
+                {'detail': "Faol hafta yo'q."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        student = get_object_or_404(
+            User, pk=request.data.get('student'), role=User.ROLE_STUDENT
+        )
+        skill = (request.data.get('skill') or '').strip()
+        if skill not in [s['code'] for s in skills]:
+            return Response(
+                {'detail': "Noto'g'ri skill."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        existing = TaskCheck.objects.filter(
+            student=student, week=week, skill=skill
+        ).first()
+        if existing:
+            existing.delete()
+            done = False
+        else:
+            TaskCheck.objects.create(
+                student=student,
+                week=week,
+                skill=skill,
+                checked_by=request.user,
+                is_late=False,
+            )
+            done = True
+        return Response({'ok': True, 'done': done})
+
+    if not week:
+        return Response({'week': None, 'skills': skills, 'students': []})
+
+    students = (
+        User.objects.filter(role=User.ROLE_STUDENT, group__isnull=False)
+        .select_related('group')
+        .order_by('first_name', 'last_name')
+    )
+    marks = {}
+    for check in TaskCheck.objects.filter(week=week):
+        marks.setdefault(check.student_id, set()).add(check.skill)
+
+    rows = []
+    for s in students:
+        done = marks.get(s.id, set())
+        rows.append({
+            'id': s.id,
+            'name': s.full_name,
+            'group': s.group.name if s.group else '',
+            'marks': {code: bool(code in done) for code in [x['code'] for x in skills]},
+            'done': len(done),
+            'score': len(done) * TaskCheck.POINTS,
+        })
+
+    return Response({
+        'week': {
+            'id': week.id,
+            'label': week.label,
+            'start_date': str(week.start_date),
+            'end_date': str(week.end_date),
+        },
+        'skills': skills,
+        'students': rows,
+        'max_score': TaskCheck.POINTS * len(skills),
+    })
