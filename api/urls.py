@@ -34,6 +34,7 @@ urlpatterns = [
     path('admin/attendance/scan-log/', admin_api.attendance_scan_log, name='admin_attendance_scan_log'),
     path('admin/attendance/qr/', admin_api.attendance_qr, name='admin_attendance_qr'),
     path('admin/league/checks/', admin_api.league_checks, name='admin_league_checks'),
+    path('admin/telegram/', admin_api.telegram_control, name='admin_telegram_control'),
     path('admin/league/', admin_api.league, name='admin_league'),
     path('admin/mocks/', admin_api.mocks, name='admin_mocks'),
     path('admin/mocks/<int:mock_id>/', admin_api.mock_detail, name='admin_mock_detail'),

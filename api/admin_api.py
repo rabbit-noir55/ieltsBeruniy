@@ -1282,3 +1282,100 @@ def league_checks(request):
         'students': rows,
         'max_score': TaskCheck.POINTS * len(skills),
     })
+
+
+# ── Telegram bot boshqaruvi ──────────────────────────────────────────────────
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.IsAuthenticated])
+@teacher_only
+def telegram_control(request):
+    """Bot webhook holatini ko'rsatadi va kerak bo'lsa qayta o'rnatadi."""
+    import requests as http_requests
+    from django.conf import settings
+
+    token = getattr(settings, 'TELEGRAM_BOT_TOKEN', '')
+    secret = getattr(settings, 'TELEGRAM_WEBHOOK_SECRET', '')
+    webapp_url = getattr(settings, 'TELEGRAM_WEBAPP_URL', '')
+
+    base_info = {
+        'token_configured': bool(token),
+        'secret_configured': bool(secret),
+        'webapp_url_configured': bool(webapp_url),
+    }
+    if not token:
+        return Response(
+            {**base_info, 'detail': 'TELEGRAM_BOT_TOKEN sozlanmagan.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    api = f'https://api.telegram.org/bot{token}'
+
+    if request.method == 'POST':
+        action = (request.data.get('action') or '').strip()
+
+        if action == 'set_webhook':
+            if not secret:
+                return Response(
+                    {**base_info, 'detail': 'TELEGRAM_WEBHOOK_SECRET sozlanmagan.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            base = request.build_absolute_uri('/').rstrip('/')
+            webhook_url = f'{base}/api/telegram/webhook/{secret}/'
+            resp = http_requests.post(
+                f'{api}/setWebhook',
+                json={'url': webhook_url, 'allowed_updates': ['message']},
+                timeout=15,
+            )
+            payload = resp.json() if resp.content else {}
+            return Response({
+                **base_info,
+                'ok': bool(payload.get('ok')),
+                'description': payload.get('description', ''),
+                'webhook_url_hint': f'{base}/api/telegram/webhook/***/',
+            })
+
+        if action == 'set_commands':
+            resp = http_requests.post(
+                f'{api}/setMyCommands',
+                json={'commands': [
+                    {'command': 'start', 'description': 'IELTS Beruniy saytini ochish'},
+                ]},
+                timeout=15,
+            )
+            payload = resp.json() if resp.content else {}
+            return Response({**base_info, 'ok': bool(payload.get('ok'))})
+
+        if action == 'delete_webhook':
+            resp = http_requests.post(f'{api}/deleteWebhook', timeout=15)
+            payload = resp.json() if resp.content else {}
+            return Response({**base_info, 'ok': bool(payload.get('ok'))})
+
+        return Response(
+            {**base_info, 'detail': "Noto'g'ri amal."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        resp = http_requests.get(f'{api}/getWebhookInfo', timeout=15)
+        payload = resp.json() if resp.content else {}
+    except Exception as exc:  # noqa: BLE001
+        return Response(
+            {**base_info, 'ok': False, 'detail': f'Telegram API xatosi: {exc}'},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+
+    result = payload.get('result') or {}
+    url = result.get('url') or ''
+    expected_suffix = f'/api/telegram/webhook/{secret}/' if secret else ''
+    return Response({
+        **base_info,
+        'ok': bool(payload.get('ok')),
+        'webhook_set': bool(url),
+        'webhook_matches_secret': bool(url and expected_suffix and url.endswith(expected_suffix)),
+        'pending_update_count': result.get('pending_update_count', 0),
+        'last_error_message': result.get('last_error_message', ''),
+        'last_error_date': result.get('last_error_date'),
+        'ip_address': result.get('ip_address', ''),
+    })

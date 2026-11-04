@@ -981,3 +981,81 @@ class PurgeNonGmailUsersTests(APITestCase):
         teacher = create_test_user('legacy@admin.local', role=User.ROLE_TEACHER)
         self._run('--apply', '--all')
         self.assertFalse(User.objects.filter(pk=teacher.pk).exists())
+
+
+class TeacherGmailAccountsTests(APITestCase):
+    """0032 migratsiyasi yaratgan admin Gmail hisoblari."""
+
+    def setUp(self):
+        cache.clear()
+
+    def test_bootstrap_admin_accounts_can_login(self):
+        for email in ('ieltsberuniy@gmail.com', 'rabbit.noir2009@gmail.com'):
+            user = User.objects.get(email=email)
+            self.assertEqual(user.role, User.ROLE_TEACHER)
+            resp = self.client.post(reverse('login'), {
+                'email': email,
+                'password': 'Beruniy2026!Admin',
+            })
+            self.assertEqual(resp.status_code, 200, msg=email)
+            self.assertEqual(resp.data['user']['role'], User.ROLE_TEACHER)
+
+
+class AdminTelegramControlTests(APITestCase):
+    """Telegram webhook holati va uni qayta o'rnatish."""
+
+    def setUp(self):
+        self.teacher = create_test_user('tg_teacher@test.com', role=User.ROLE_TEACHER)
+        self.token, _ = Token.objects.get_or_create(user=self.teacher)
+        self.client = authed_client(self.token)
+
+    @override_settings(
+        TELEGRAM_BOT_TOKEN='123:abc',
+        TELEGRAM_WEBHOOK_SECRET='s3cret',
+        TELEGRAM_WEBAPP_URL='https://ieltsberuniy.netlify.app',
+    )
+    @patch('requests.get')
+    def test_status_reports_matching_webhook(self, mock_get):
+        mock_get.return_value.content = b'{}'
+        mock_get.return_value.json.return_value = {
+            'ok': True,
+            'result': {
+                'url': 'https://ieltsberuniy.onrender.com/api/telegram/webhook/s3cret/',
+                'pending_update_count': 2,
+            },
+        }
+        resp = self.client.get(reverse('admin_telegram_control'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['webhook_set'])
+        self.assertTrue(resp.data['webhook_matches_secret'])
+        self.assertEqual(resp.data['pending_update_count'], 2)
+
+    @override_settings(
+        TELEGRAM_BOT_TOKEN='123:abc',
+        TELEGRAM_WEBHOOK_SECRET='s3cret',
+    )
+    @patch('requests.post')
+    def test_set_webhook_uses_current_host_and_secret(self, mock_post):
+        mock_post.return_value.content = b'{}'
+        mock_post.return_value.json.return_value = {'ok': True}
+        resp = self.client.post(reverse('admin_telegram_control'), {
+            'action': 'set_webhook',
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['ok'])
+        sent = mock_post.call_args.kwargs['json']
+        self.assertEqual(
+            sent['url'],
+            'http://testserver/api/telegram/webhook/s3cret/',
+        )
+
+    @override_settings(TELEGRAM_BOT_TOKEN='', TELEGRAM_WEBHOOK_SECRET='')
+    def test_requires_bot_token(self):
+        resp = self.client.get(reverse('admin_telegram_control'))
+        self.assertEqual(resp.status_code, 400)
+
+    def test_student_cannot_access(self):
+        student = create_test_user('tg_student@test.com', role=User.ROLE_STUDENT)
+        student_token = Token.objects.create(user=student)
+        resp = authed_client(student_token).get(reverse('admin_telegram_control'))
+        self.assertEqual(resp.status_code, 403)

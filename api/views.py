@@ -1,4 +1,5 @@
 import json
+import os
 import secrets
 import string
 from datetime import timedelta, timezone as dt_timezone
@@ -44,7 +45,13 @@ def tashkent_day_bounds():
 
 
 def health(request):
-    return JsonResponse({"status": "ok", "service": "EnthusiasticEnglish API"})
+    # Render avtomatik beradigan commit — deploy versiyasini tekshirish uchun.
+    commit = (os.environ.get('RENDER_GIT_COMMIT') or 'local')[:7]
+    return JsonResponse({
+        "status": "ok",
+        "service": "EnthusiasticEnglish API",
+        "commit": commit,
+    })
 
 
 @api_view(['POST'])
