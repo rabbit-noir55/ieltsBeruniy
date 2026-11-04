@@ -473,7 +473,12 @@ class ExaminerLink(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = [('examiner', 'student')]
+        # Bir o'quvchi faqat bitta examinerga biriktiriladi.
+        constraints = [
+            models.UniqueConstraint(
+                fields=['student'], name='unique_examiner_per_student'
+            ),
+        ]
         ordering = ['examiner_id', 'student__first_name']
 
     def __str__(self):

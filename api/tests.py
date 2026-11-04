@@ -875,3 +875,60 @@ class CompetitionTests(APITestCase):
         self.assertFalse(TaskCheck.objects.filter(
             student=outsider, skill='writing'
         ).exists())
+
+    def test_admin_league_toggle_moves_student_to_new_examiner(self):
+        examiner2 = create_test_user(
+            'examiner2@test.com', role=User.ROLE_STUDENT, group=self.group
+        )
+        examiner2.is_examiner = True
+        examiner2.save(update_fields=['is_examiner'])
+        client = self._client(self.teacher)
+
+        resp = client.post(reverse('admin_league'), {
+            'action': 'link_toggle',
+            'examiner': examiner2.id,
+            'student': self.student.id,
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['linked'])
+        self.assertTrue(resp.data.get('moved'))
+        self.assertEqual(resp.data['moved_from'], self.examiner.full_name)
+        self.assertFalse(ExaminerLink.objects.filter(
+            examiner=self.examiner, student=self.student
+        ).exists())
+        self.assertTrue(ExaminerLink.objects.filter(
+            examiner=examiner2, student=self.student
+        ).exists())
+        self.assertEqual(
+            ExaminerLink.objects.filter(student=self.student).count(), 1
+        )
+
+    def test_admin_league_link_add_rejects_owned_student(self):
+        examiner2 = create_test_user(
+            'examiner3@test.com', role=User.ROLE_STUDENT, group=self.group
+        )
+        examiner2.is_examiner = True
+        examiner2.save(update_fields=['is_examiner'])
+        client = self._client(self.teacher)
+
+        resp = client.post(reverse('admin_league'), {
+            'action': 'link_add',
+            'examiner': examiner2.id,
+            'student': self.student.id,
+        })
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(ExaminerLink.objects.filter(
+            examiner=examiner2, student=self.student
+        ).exists())
+        self.assertEqual(
+            ExaminerLink.objects.filter(student=self.student).count(), 1
+        )
+
+    def test_one_student_cannot_have_two_examiners(self):
+        from django.db import IntegrityError
+
+        examiner2 = create_test_user(
+            'examiner4@test.com', role=User.ROLE_STUDENT, group=self.group
+        )
+        with self.assertRaises(IntegrityError):
+            ExaminerLink.objects.create(examiner=examiner2, student=self.student)

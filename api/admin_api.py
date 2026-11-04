@@ -391,14 +391,43 @@ def league(request):
             existing = ExaminerLink.objects.filter(
                 examiner=examiner, student=student
             ).first()
-            if action == 'link_toggle' and existing:
-                existing.delete()
-                return Response({'ok': True, 'linked': False, 'link_id': None})
-
             if existing:
+                if action == 'link_toggle':
+                    existing.delete()
+                    return Response({'ok': True, 'linked': False, 'link_id': None})
                 return Response(
                     {'ok': True, 'linked': True, 'link_id': existing.id}
                 )
+
+            other = (
+                ExaminerLink.objects.filter(student=student)
+                .select_related('examiner')
+                .first()
+            )
+            if other:
+                if action != 'link_toggle':
+                    return Response(
+                        {
+                            'detail': (
+                                "Bu o'quvchi allaqachon "
+                                f"{other.examiner.full_name} examinerga biriktirilgan."
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                # Bir o'quvchi faqat bitta examinerga tegishli — yangisiga o'tkazamiz.
+                moved_from = other.examiner.full_name
+                other.delete()
+                link = ExaminerLink.objects.create(
+                    examiner=examiner, student=student
+                )
+                return Response({
+                    'ok': True,
+                    'linked': True,
+                    'link_id': link.id,
+                    'moved': True,
+                    'moved_from': moved_from,
+                })
 
             link = ExaminerLink.objects.create(examiner=examiner, student=student)
             return Response({'ok': True, 'linked': True, 'link_id': link.id})
@@ -430,6 +459,12 @@ def league(request):
     for s in group_students:
         students_by_group.setdefault(s.group_id, []).append(s)
 
+    # Har bir o'quvchining examineri (bir o'quvchi — bitta examiner).
+    owners = {
+        link.student_id: link.examiner
+        for link in ExaminerLink.objects.select_related('examiner')
+    }
+
     out = []
     for e in examiners:
         links = {l.student_id: l for l in e.assigned_students.all()}
@@ -456,6 +491,7 @@ def league(request):
                     'name': s.full_name,
                     'linked': s.id in links,
                     'link_id': links[s.id].id if s.id in links else None,
+                    'owner': owners[s.id].full_name if s.id in owners else None,
                 }
                 for s in classmates
             ],
