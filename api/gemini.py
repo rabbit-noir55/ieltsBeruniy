@@ -30,8 +30,9 @@ FALLBACK_MODELS = [
 _RETRY_STATUSES = {403, 404, 429, 500, 503}
 
 
-def _pick_key():
-    return random.choice(GEMINI_KEYS) if GEMINI_KEYS else None
+def _pick_key(keys=None):
+    pool = [k for k in (keys or GEMINI_KEYS) if k]
+    return random.choice(pool) if pool else None
 
 
 def _model_chain(model):
@@ -70,12 +71,13 @@ def call_gemini(
     thinking="low",
     timeout=180,
     retries=1,
+    api_keys=None,
 ):
     """Gemini'ga so'rov yuboradi.
 
     Model limiti tugasa yoki model mavjud bo'lmasa, FALLBACK_MODELS ga o'tadi.
     """
-    api_key = _pick_key()
+    api_key = _pick_key(api_keys)
     if not api_key:
         return {"success": False, "error": "Gemini API key topilmadi."}
 

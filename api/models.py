@@ -71,6 +71,10 @@ class User(AbstractUser):
     password_plain = models.CharField(max_length=255, blank=True, default='')
     telegram_id = models.BigIntegerField(null=True, blank=True, unique=True, db_index=True)
     telegram_username = models.CharField(max_length=64, blank=True, default='')
+    # Saytda kiritilgan telefon — bot /start bosganda shu raqam orqali topiladi.
+    telegram_phone = models.CharField(
+        max_length=20, blank=True, default='', db_index=True
+    )
     linked_at = models.DateTimeField(null=True, blank=True)
 
     USERNAME_FIELD = 'email'
@@ -514,3 +518,85 @@ class TaskCheck(models.Model):
 
     def __str__(self):
         return f'{self.student} — {self.week} — {self.skill}'
+
+
+class AIProvider(models.Model):
+    """AI provayder (Gemini, Groq, OpenRouter, ...). Kalitlar env'da saqlanadi."""
+
+    KIND_GEMINI = 'gemini'
+    KIND_OPENAI = 'openai'
+    KIND_CHOICES = [
+        (KIND_GEMINI, 'Google Gemini'),
+        (KIND_OPENAI, 'OpenAI-compatible'),
+    ]
+
+    name = models.CharField(max_length=80)
+    slug = models.SlugField(max_length=80, unique=True)
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES, default=KIND_OPENAI)
+    base_url = models.CharField(max_length=300, blank=True, default='')
+    # Masalan: GROQ_KEY_1,GROQ_KEY_2 — vergul bilan bir nechta kalit
+    api_key_env = models.CharField(max_length=200, blank=True, default='')
+    enabled = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class AIModel(models.Model):
+    """Provayderdagi model va u qaysi bo'limlarda ishlatilishi."""
+
+    FEATURE_CHOICES = [
+        ('writing', 'Writing feedback'),
+        ('speaking', 'Speaking feedback'),
+        ('tools', 'AI tools'),
+        ('mock_extract', 'Mock HTML → JSON'),
+    ]
+
+    provider = models.ForeignKey(
+        AIProvider, on_delete=models.CASCADE, related_name='models'
+    )
+    name = models.CharField(max_length=120)
+    model_id = models.CharField(max_length=160)
+    features = models.JSONField(default=list, blank=True)
+    priority = models.PositiveIntegerField(default=100)
+    enabled = models.BooleanField(default=True)
+    max_tokens = models.PositiveIntegerField(default=8192)
+    temperature = models.FloatField(default=0.7)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['priority', 'id']
+        unique_together = [('provider', 'model_id')]
+
+    def __str__(self):
+        return f'{self.provider.slug}/{self.model_id}'
+
+
+class AIUsage(models.Model):
+    """Har bir AI so'rovi: qaysi bo'lim, provayder, model, token va xato."""
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    user = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='ai_usages',
+    )
+    feature = models.CharField(max_length=40, db_index=True)
+    provider = models.CharField(max_length=80, blank=True, default='')
+    model = models.CharField(max_length=160, blank=True, default='')
+    success = models.BooleanField(default=False)
+    tokens_in = models.PositiveIntegerField(default=0)
+    tokens_out = models.PositiveIntegerField(default=0)
+    latency_ms = models.PositiveIntegerField(default=0)
+    error = models.TextField(blank=True, default='')
+    meta = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name_plural = 'AI usage'
+
+    def __str__(self):
+        return f'{self.feature} · {self.provider}/{self.model}'

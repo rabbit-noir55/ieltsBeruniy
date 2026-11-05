@@ -10,7 +10,7 @@ import html as html_lib
 import json
 import re
 
-from .gemini import call_gemini, parse_json_response
+from .gemini import parse_json_response
 from .mock_schema import (
     MAX_PARTS,
     TOTAL_QUESTIONS,
@@ -231,9 +231,13 @@ HTML>>>
 # ─────────────────────────────────────────────────────────────────────────────
 #  Asosiy oqim
 # ─────────────────────────────────────────────────────────────────────────────
-def _ask(prompt, schema):
-    return call_gemini(
+def _ask(prompt, schema, user=None):
+    from .ai_gateway import call_ai
+
+    return call_ai(
         prompt,
+        'mock_extract',
+        user=user,
         temperature=0.1,
         max_tokens=65536,
         response_schema=schema,
@@ -242,7 +246,7 @@ def _ask(prompt, schema):
     )
 
 
-def extract_mock(raw_html, skill, series=None, test=1, max_repairs=2):
+def extract_mock(raw_html, skill, series=None, test=1, max_repairs=2, user=None):
     """HTML -> {"success", "payload", "validation", "model", "attempts"}"""
     skill = "reading" if str(skill).lower().startswith("read") else "listening"
     cleaned = clean_html(raw_html)
@@ -255,7 +259,7 @@ def extract_mock(raw_html, skill, series=None, test=1, max_repairs=2):
     schema = build_response_schema()
     prompt = build_prompt(cleaned, skill, series=series, test=test)
 
-    result = _ask(prompt, schema)
+    result = _ask(prompt, schema, user=user)
     if not result.get("success"):
         return {"success": False, "error": result.get("error", "Gemini xatosi.")}
 
@@ -275,7 +279,7 @@ def extract_mock(raw_html, skill, series=None, test=1, max_repairs=2):
         repair_prompt = build_repair_prompt(
             cleaned, validation["payload"], validation, skill
         )
-        repaired = _ask(repair_prompt, schema)
+        repaired = _ask(repair_prompt, schema, user=user)
         if not repaired.get("success"):
             break
         parsed = parse_json_response(repaired["text"])

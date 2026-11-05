@@ -486,8 +486,9 @@ def ai_chat(request):
     if not prompt:
         return Response({'detail': 'Prompt kiritilishi shart.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    from .gemini import call_gemini, parse_json_response
-    result = call_gemini(prompt)
+    from .ai_gateway import call_ai
+    from .gemini import parse_json_response
+    result = call_ai(prompt, 'tools', user=request.user)
     if not result['success']:
         return Response({'detail': result['error']}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
@@ -501,7 +502,7 @@ def ai_chat(request):
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def writing_feedback(request):
-    """Writing baholash — essay matnini Gemini orqali baholash."""
+    """Writing baholash — admin panelda tanlangan AI model orqali."""
     task_part = request.data.get('task_part')
     essay_text = (request.data.get('essay_text') or '').strip()
 
@@ -510,7 +511,8 @@ def writing_feedback(request):
     if len(essay_text.split()) < 10:
         return Response({'detail': 'Essay juda qisqa (kamida 10 so\'z).'}, status=status.HTTP_400_BAD_REQUEST)
 
-    from .gemini import call_gemini, parse_json_response
+    from .ai_gateway import call_ai
+    from .gemini import parse_json_response
 
     word_target = 150 if task_part == 1 else 250
     prompt = f"""You are an experienced IELTS examiner. Evaluate this Writing Task {task_part} response.
@@ -534,7 +536,7 @@ Target: ~{word_target} words. Return ONLY this JSON:
   "summary": "<2-3 sentence summary>"
 }}"""
 
-    result = call_gemini(prompt, temperature=0.5)
+    result = call_ai(prompt, 'writing', user=request.user, temperature=0.5)
     if not result['success']:
         return Response({'detail': result['error']}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
@@ -547,13 +549,14 @@ Target: ~{word_target} words. Return ONLY this JSON:
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def speaking_feedback(request):
-    """Speaking baholash — transcript matnini Gemini orqali baholash."""
+    """Speaking baholash — admin panelda tanlangan AI model orqali."""
     prompt = (request.data.get('prompt') or '').strip()
     if not prompt:
         return Response({'detail': 'Prompt kiritilishi shart.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    from .gemini import call_gemini, parse_json_response
-    result = call_gemini(prompt, temperature=0.5)
+    from .ai_gateway import call_ai
+    from .gemini import parse_json_response
+    result = call_ai(prompt, 'speaking', user=request.user, temperature=0.5)
     if not result['success']:
         return Response({'detail': result['error']}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 

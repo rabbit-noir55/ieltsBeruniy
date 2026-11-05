@@ -552,6 +552,7 @@ def mocks(request):
                 skill,
                 series=series,
                 test=test_num,
+                user=request.user,
             )
             if not result.get('success'):
                 return Response(
@@ -1378,4 +1379,285 @@ def telegram_control(request):
         'last_error_message': result.get('last_error_message', ''),
         'last_error_date': result.get('last_error_date'),
         'ip_address': result.get('ip_address', ''),
+    })
+
+
+# ── AI provayder/model va sarf boshqaruvi ────────────────────────────────────
+
+
+def _provider_payload(provider):
+    from .ai_gateway import provider_env_ready
+
+    return {
+        'id': provider.id,
+        'name': provider.name,
+        'slug': provider.slug,
+        'kind': provider.kind,
+        'base_url': provider.base_url,
+        'api_key_env': provider.api_key_env,
+        'enabled': provider.enabled,
+        'env_ready': provider_env_ready(provider),
+    }
+
+
+def _model_payload(model):
+    return {
+        'id': model.id,
+        'provider': model.provider_id,
+        'provider_name': model.provider.name,
+        'provider_slug': model.provider.slug,
+        'name': model.name,
+        'model_id': model.model_id,
+        'features': model.features or [],
+        'priority': model.priority,
+        'enabled': model.enabled,
+        'max_tokens': model.max_tokens,
+        'temperature': model.temperature,
+    }
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.IsAuthenticated])
+@teacher_only
+def ai_providers(request):
+    from .ai_gateway import FEATURES, seed_default_providers
+    from .models import AIProvider
+
+    if request.method == 'POST':
+        action = (request.data.get('action') or 'save').strip()
+        if action == 'seed':
+            created = seed_default_providers()
+            return Response({'ok': True, 'created': created})
+        if action == 'delete':
+            AIProvider.objects.filter(pk=request.data.get('id')).delete()
+            return Response({'ok': True})
+
+        data = request.data
+        provider_id = data.get('id')
+        provider = AIProvider.objects.filter(pk=provider_id).first() if provider_id else AIProvider()
+        name = (data.get('name') or '').strip()
+        slug = (data.get('slug') or '').strip().lower()
+        if not name or not slug:
+            return Response(
+                {'detail': 'Nom va slug kerak.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if AIProvider.objects.filter(slug=slug).exclude(pk=provider.pk).exists():
+            return Response(
+                {'detail': 'Bu slug band.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        provider.name = name[:80]
+        provider.slug = slug[:80]
+        provider.kind = data.get('kind') or AIProvider.KIND_OPENAI
+        provider.base_url = (data.get('base_url') or '').strip()[:300]
+        provider.api_key_env = (data.get('api_key_env') or '').strip()[:200]
+        provider.enabled = bool(data.get('enabled', True))
+        provider.save()
+        return Response({'ok': True, 'provider': _provider_payload(provider)})
+
+    return Response({
+        'providers': [
+            _provider_payload(p) for p in AIProvider.objects.all()
+        ],
+        'features': [{'code': c, 'label': label} for c, label in FEATURES],
+    })
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.IsAuthenticated])
+@teacher_only
+def ai_models(request):
+    from .ai_gateway import FEATURES
+    from .models import AIModel, AIProvider
+
+    if request.method == 'POST':
+        action = (request.data.get('action') or 'save').strip()
+        if action == 'delete':
+            AIModel.objects.filter(pk=request.data.get('id')).delete()
+            return Response({'ok': True})
+
+        data = request.data
+        model_id = data.get('id')
+        model = AIModel.objects.filter(pk=model_id).first() if model_id else AIModel()
+        provider = AIProvider.objects.filter(pk=data.get('provider')).first()
+        if not provider:
+            return Response(
+                {'detail': 'Provayder tanlanmagan.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        name = (data.get('name') or '').strip()
+        model_key = (data.get('model_id') or '').strip()
+        if not name or not model_key:
+            return Response(
+                {'detail': 'Nom va model ID kerak.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if AIModel.objects.filter(
+            provider=provider, model_id=model_key
+        ).exclude(pk=model.pk).exists():
+            return Response(
+                {'detail': 'Bu model allaqachon qo\'shilgan.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        allowed = {c for c, _ in FEATURES}
+        features = data.get('features')
+        if not isinstance(features, list):
+            features = []
+        features = [f for f in features if f == '*' or f in allowed] or ['*']
+
+        model.provider = provider
+        model.name = name[:120]
+        model.model_id = model_key[:160]
+        model.features = features
+        try:
+            model.priority = int(data.get('priority') or 100)
+        except (TypeError, ValueError):
+            model.priority = 100
+        model.enabled = bool(data.get('enabled', True))
+        try:
+            model.max_tokens = max(1, int(data.get('max_tokens') or 8192))
+        except (TypeError, ValueError):
+            model.max_tokens = 8192
+        try:
+            model.temperature = min(2.0, max(0.0, float(data.get('temperature', 0.7))))
+        except (TypeError, ValueError):
+            model.temperature = 0.7
+        model.save()
+        return Response({'ok': True, 'model': _model_payload(model)})
+
+    models = AIModel.objects.select_related('provider').all()
+    return Response({
+        'models': [_model_payload(m) for m in models],
+        'providers': [
+            {'id': p.id, 'name': p.name, 'slug': p.slug}
+            for p in AIProvider.objects.all()
+        ],
+        'features': [{'code': c, 'label': label} for c, label in FEATURES],
+    })
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+@teacher_only
+def ai_usage(request):
+    from datetime import timedelta
+
+    from django.db.models import Avg, Sum
+    from django.db.models.functions import TruncDate
+
+    from .ai_gateway import FEATURES
+    from .models import AIUsage
+
+    try:
+        days = int(request.query_params.get('days') or 7)
+    except (TypeError, ValueError):
+        days = 7
+    days = max(1, min(days, 365))
+
+    qs = AIUsage.objects.all()
+    since = timezone.now() - timedelta(days=days)
+    qs = qs.filter(created_at__gte=since)
+
+    feature = (request.query_params.get('feature') or '').strip()
+    if feature:
+        qs = qs.filter(feature=feature)
+
+    provider = (request.query_params.get('provider') or '').strip()
+    if provider:
+        qs = qs.filter(provider=provider)
+
+    totals = qs.aggregate(
+        calls=Count('id'),
+        success=Count('id', filter=Q(success=True)),
+        tokens_in=Sum('tokens_in'),
+        tokens_out=Sum('tokens_out'),
+        avg_latency=Avg('latency_ms'),
+    )
+    by_feature = (
+        qs.values('feature')
+        .annotate(
+            calls=Count('id'),
+            success=Count('id', filter=Q(success=True)),
+            tokens=Sum('tokens_in') + Sum('tokens_out'),
+        )
+        .order_by('-calls')
+    )
+    by_model = (
+        qs.values('provider', 'model')
+        .annotate(
+            calls=Count('id'),
+            success=Count('id', filter=Q(success=True)),
+            tokens=Sum('tokens_in') + Sum('tokens_out'),
+        )
+        .order_by('-calls')[:20]
+    )
+    daily = (
+        qs.annotate(day=TruncDate('created_at'))
+        .values('day')
+        .annotate(calls=Count('id'), failures=Count('id', filter=~Q(success=True)))
+        .order_by('day')
+    )
+    recent = (
+        qs.select_related('user')
+        .order_by('-created_at')[:200]
+    )
+
+    return Response({
+        'days': days,
+        'totals': {
+            'calls': totals['calls'] or 0,
+            'success': totals['success'] or 0,
+            'failures': (totals['calls'] or 0) - (totals['success'] or 0),
+            'tokens_in': totals['tokens_in'] or 0,
+            'tokens_out': totals['tokens_out'] or 0,
+            'avg_latency': round(totals['avg_latency'] or 0),
+        },
+        'by_feature': [
+            {
+                'feature': row['feature'],
+                'label': dict(FEATURES).get(row['feature'], row['feature']),
+                'calls': row['calls'],
+                'success': row['success'],
+                'tokens': row['tokens'] or 0,
+            }
+            for row in by_feature
+        ],
+        'by_model': [
+            {
+                'provider': row['provider'],
+                'model': row['model'],
+                'calls': row['calls'],
+                'success': row['success'],
+                'tokens': row['tokens'] or 0,
+            }
+            for row in by_model
+        ],
+        'daily': [
+            {
+                'date': str(row['day']),
+                'calls': row['calls'],
+                'failures': row['failures'],
+            }
+            for row in daily
+        ],
+        'recent': [
+            {
+                'id': row.id,
+                'created_at': row.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                'feature': row.feature,
+                'provider': row.provider,
+                'model': row.model,
+                'success': row.success,
+                'tokens_in': row.tokens_in,
+                'tokens_out': row.tokens_out,
+                'latency_ms': row.latency_ms,
+                'error': row.error[:200],
+                'user': row.user.email if row.user else '—',
+            }
+            for row in recent
+        ],
+        'features': [{'code': c, 'label': label} for c, label in FEATURES],
+        'providers': sorted({p for p in AIUsage.objects.values_list('provider', flat=True) if p}),
     })

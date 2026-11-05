@@ -1059,3 +1059,208 @@ class AdminTelegramControlTests(APITestCase):
         student_token = Token.objects.create(user=student)
         resp = authed_client(student_token).get(reverse('admin_telegram_control'))
         self.assertEqual(resp.status_code, 403)
+
+
+@override_settings(TELEGRAM_WEBHOOK_SECRET='secret123', TELEGRAM_BOT_USERNAME='testbot')
+class TelegramContactFlowTests(APITestCase):
+    """Saytda telefon/username kiritish va bot orqali ulash."""
+
+    def _webhook(self, payload):
+        return self.client.post(
+            reverse('telegram_webhook', args=['secret123']),
+            payload,
+            content_type='application/json',
+        )
+
+    def _client_for(self, user):
+        token, _ = Token.objects.get_or_create(user=user)
+        return authed_client(token)
+
+    def test_site_saves_normalized_phone(self):
+        user = create_test_user('tg_phone@test.com')
+        client = self._client_for(user)
+        resp = client.post(reverse('telegram_contact'), {
+            'phone': '+998 90 123-45-67',
+        })
+        self.assertEqual(resp.status_code, 200)
+        user.refresh_from_db()
+        self.assertEqual(user.telegram_phone, '998901234567')
+        self.assertFalse(resp.data['linked'])
+
+    def test_site_rejects_duplicate_phone(self):
+        first = create_test_user('tg_first@test.com')
+        second = create_test_user('tg_second@test.com')
+        first.telegram_phone = '998901112233'
+        first.save(update_fields=['telegram_phone'])
+        resp = self._client_for(second).post(reverse('telegram_contact'), {
+            'phone': '901112233',
+        })
+        self.assertEqual(resp.status_code, 400)
+
+    @patch('api.telegram.send_message')
+    def test_start_without_username_asks_contact(self, mock_send):
+        self._webhook({
+            'message': {
+                'chat': {'id': 555},
+                'from': {'id': 555, 'username': 'unknown_user'},
+                'text': '/start',
+            },
+        })
+        args, kwargs = mock_send.call_args
+        self.assertIn('request_contact', str(kwargs.get('reply_markup')))
+
+    @patch('api.telegram.send_message')
+    def test_start_matches_saved_username(self, mock_send):
+        user = create_test_user('tg_named@test.com')
+        user.telegram_username = 'my_tg_name'
+        user.save(update_fields=['telegram_username'])
+        self._webhook({
+            'message': {
+                'chat': {'id': 777},
+                'from': {'id': 777, 'username': 'my_tg_name'},
+                'text': '/start',
+            },
+        })
+        user.refresh_from_db()
+        self.assertEqual(user.telegram_id, 777)
+
+    @patch('api.telegram.send_message')
+    def test_contact_links_user_by_phone(self, mock_send):
+        user = create_test_user('tg_contact@test.com')
+        user.telegram_phone = '998901234567'
+        user.save(update_fields=['telegram_phone'])
+        self._webhook({
+            'message': {
+                'chat': {'id': 888},
+                'from': {'id': 888, 'username': 'contact_user'},
+                'contact': {
+                    'phone_number': '+998901234567',
+                    'user_id': 888,
+                },
+            },
+        })
+        user.refresh_from_db()
+        self.assertEqual(user.telegram_id, 888)
+        self.assertEqual(user.telegram_username, 'contact_user')
+
+    @patch('api.telegram.send_message')
+    def test_contact_must_belong_to_sender(self, mock_send):
+        user = create_test_user('tg_foreign@test.com')
+        user.telegram_phone = '998907778899'
+        user.save(update_fields=['telegram_phone'])
+        self._webhook({
+            'message': {
+                'chat': {'id': 999},
+                'from': {'id': 999, 'username': 'other_user'},
+                'contact': {
+                    'phone_number': '+998907778899',
+                    'user_id': 12345,
+                },
+            },
+        })
+        user.refresh_from_db()
+        self.assertIsNone(user.telegram_id)
+
+
+class AIGatewayTests(APITestCase):
+    """AI gateway: DB model tanlash, OpenAI-compatible chaqiruv va usage log."""
+
+    def test_openai_compatible_call_logs_usage(self):
+        from unittest.mock import patch
+
+        from .ai_gateway import call_ai
+        from .models import AIModel, AIProvider, AIUsage
+
+        provider = AIProvider.objects.create(
+            name='Groq test', slug='groq-test', kind=AIProvider.KIND_OPENAI,
+            base_url='https://api.groq.com/openai/v1',
+            api_key_env='GROQ_KEY_1',
+        )
+        AIModel.objects.create(
+            provider=provider, name='Llama', model_id='llama-test',
+            features=['tools'], priority=1,
+        )
+        user = create_test_user('ai_user@test.com')
+
+        with patch.dict('os.environ', {'GROQ_KEY_1': 'test-key'}), \
+                patch('api.ai_gateway.requests.post') as mock_post:
+            mock_post.return_value.status_code = 200
+            mock_post.return_value.json.return_value = {
+                'model': 'llama-test',
+                'choices': [{'message': {'content': 'salom'}}],
+                'usage': {'prompt_tokens': 12, 'completion_tokens': 8},
+            }
+            result = call_ai('hi', 'tools', user=user)
+
+        self.assertTrue(result['success'])
+        self.assertEqual(result['text'], 'salom')
+        self.assertEqual(result['provider'], 'Groq test')
+        usage = AIUsage.objects.get()
+        self.assertTrue(usage.success)
+        self.assertEqual(usage.tokens_in, 12)
+        self.assertEqual(usage.tokens_out, 8)
+        self.assertEqual(usage.feature, 'tools')
+
+    def test_falls_back_to_env_gemini(self):
+        from unittest.mock import patch
+
+        from .ai_gateway import call_ai
+        from .models import AIUsage
+
+        with patch('api.ai_gateway.call_gemini') as mock_gemini:
+            mock_gemini.return_value = {
+                'success': True, 'text': 'zaxira', 'model': 'gemini-test',
+            }
+            result = call_ai('hi', 'writing')
+
+        self.assertTrue(result['success'])
+        self.assertEqual(result['provider'], 'Gemini (env)')
+        usage = AIUsage.objects.get()
+        self.assertEqual(usage.provider, 'Gemini (env)')
+        self.assertEqual(usage.model, 'gemini-test')
+
+
+class AdminAITests(APITestCase):
+    """AI admin API: provayder/model CRUD va sarf statistikasi."""
+
+    def setUp(self):
+        self.teacher = create_test_user('ai_teacher@test.com', role=User.ROLE_TEACHER)
+        token, _ = Token.objects.get_or_create(user=self.teacher)
+        self.client = authed_client(token)
+
+    def test_seed_and_create_model(self):
+        from .models import AIModel, AIProvider
+
+        resp = self.client.post(reverse('admin_ai_providers'), {'action': 'seed'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(AIProvider.objects.count(), 5)
+
+        groq = AIProvider.objects.get(slug='groq')
+        resp = self.client.post(reverse('admin_ai_models'), {
+            'provider': groq.id,
+            'name': 'Llama',
+            'model_id': 'llama-test',
+            'features': ['tools'],
+            'priority': 5,
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(AIModel.objects.filter(model_id='llama-test').exists())
+
+    def test_usage_endpoint_aggregates(self):
+        from .models import AIUsage
+
+        AIUsage.objects.create(feature='tools', provider='Groq', model='x',
+                               success=True, tokens_in=10, tokens_out=5)
+        AIUsage.objects.create(feature='writing', provider='Groq', model='x',
+                               success=False, tokens_in=1, tokens_out=0)
+        resp = self.client.get(reverse('admin_ai_usage'), {'days': 7})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['totals']['calls'], 2)
+        self.assertEqual(resp.data['totals']['success'], 1)
+        self.assertEqual(resp.data['totals']['tokens_in'], 11)
+
+    def test_student_cannot_manage_ai(self):
+        student = create_test_user('ai_student@test.com', role=User.ROLE_STUDENT)
+        token, _ = Token.objects.get_or_create(user=student)
+        resp = authed_client(token).get(reverse('admin_ai_providers'))
+        self.assertEqual(resp.status_code, 403)
